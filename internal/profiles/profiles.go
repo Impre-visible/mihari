@@ -36,6 +36,9 @@ type Profile struct {
 	Label         string  `json:"label"`
 	// Appended as is to the engine's command line, split on whitespace.
 	ExtraArgs string `json:"extraArgs"`
+	// A job fails past this many model calls or minutes.
+	MaxTurns   int `json:"maxTurns"`
+	MaxMinutes int `json:"maxMinutes"`
 }
 
 // Segment is a weekly time range. Days use time.Weekday numbering, and an End
@@ -99,6 +102,12 @@ func (p *Profile) normalize() {
 	}
 	if p.Trigger != TriggerIssues {
 		p.Trigger = TriggerPing
+	}
+	if p.MaxTurns < 1 {
+		p.MaxTurns = 50
+	}
+	if p.MaxMinutes < 1 {
+		p.MaxMinutes = 30
 	}
 }
 

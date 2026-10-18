@@ -125,8 +125,10 @@ func ollamaPull(ctx context.Context, model string, progress func(done, total int
 	if err := s.cmd.Start(); err != nil {
 		return err
 	}
+	pid := s.cmd.Process.Pid
+	track(pid, info.Path)
 	s.done = make(chan struct{})
-	go func() { _ = s.cmd.Wait(); close(s.done) }()
+	go func() { _ = s.cmd.Wait(); killGroup(pid); untrack(pid); close(s.done) }()
 	defer s.Stop()
 
 	readyCtx, cancel := context.WithTimeout(ctx, 30*time.Second)

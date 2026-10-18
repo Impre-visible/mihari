@@ -8,6 +8,7 @@ import (
 
 	"github.com/Impre-visible/mihari/internal/engine"
 	"github.com/Impre-visible/mihari/internal/gitlab"
+	"github.com/Impre-visible/mihari/internal/jobs"
 	"github.com/Impre-visible/mihari/internal/projects"
 	"github.com/Impre-visible/mihari/internal/sandbox"
 	"github.com/Impre-visible/mihari/internal/scheduler"
@@ -32,12 +33,21 @@ func init() {
 	application.RegisterEvent[tasks.Snapshot](tasks.UpdatedEvent)
 	application.RegisterEvent[scheduler.Snapshot](scheduler.UpdatedEvent)
 	application.RegisterEvent[engine.Download](engine.DownloadEvent)
+	application.RegisterEvent[[]jobs.Summary](jobs.UpdatedEvent)
+	application.RegisterEvent[jobs.TranscriptLine](jobs.TranscriptEvent)
 }
 
 // main function serves as the application's entry point. It initializes the application, creates a window,
 // and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
 // logs any error that might occur.
 func main() {
+	// Services that call each other. Jobs start before tasks, whose first poll
+	// already hands todos over to them.
+	schedulerService := &scheduler.Service{}
+	tasksService := &tasks.Service{}
+	jobsService := &jobs.Service{Scheduler: schedulerService, RemoveSimulated: tasksService.RemoveSimulated}
+	schedulerService.Busy = jobsService.Busy
+	tasksService.OnReady = jobsService.Offer
 
 	// Create a new Wails application by providing the necessary options.
 	// Variables 'Name' and 'Description' are for application metadata.
@@ -52,9 +62,10 @@ func main() {
 			application.NewService(&gitlab.Service{}),
 			application.NewService(&projects.Service{}),
 			application.NewService(&sandbox.Service{}),
-			application.NewService(&tasks.Service{}),
-			application.NewService(&scheduler.Service{}),
+			application.NewService(schedulerService),
 			application.NewService(&engine.Service{}),
+			application.NewService(jobsService),
+			application.NewService(tasksService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

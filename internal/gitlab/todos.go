@@ -31,6 +31,8 @@ type Todo struct {
 	Body string `json:"body"`
 	// Made on the Dev page rather than read from GitLab, so never marked done there.
 	Simulated bool `json:"simulated"`
+	// The comment that mentioned the bot; 0 for a review request.
+	NoteID int `json:"noteId"`
 }
 
 // Actions that ask the bot to do something; the rest (build_failed, unmergeable…) is noise.
@@ -95,6 +97,7 @@ func PendingTodos(ctx context.Context) ([]Todo, error) {
 			Author:    t.Author.Username,
 			CreatedAt: t.CreatedAt,
 			Body:      t.Body,
+			NoteID:    NoteIDFromURL(t.TargetURL),
 		})
 	}
 	return todos, nil

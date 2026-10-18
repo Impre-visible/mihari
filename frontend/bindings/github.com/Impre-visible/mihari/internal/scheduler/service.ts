@@ -18,6 +18,10 @@ import * as engine$0 from "../engine/models.js";
 // @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
+export function Active(): $CancellablePromise<$models.Active> {
+    return $Call.ByID(1213479894);
+}
+
 /**
  * Chat sends message to the running engine, optionally behind the active
  * profile's prompt as the system message, to check the model answers.
@@ -31,6 +35,13 @@ export function Chat(message: string, withProfilePrompt: boolean): $CancellableP
  */
 export function Engines(): $CancellablePromise<engine$0.Info[] | null> {
     return $Call.ByID(367439383);
+}
+
+/**
+ * Nudge re-checks the schedule now, as when the last job of a drained profile ends.
+ */
+export function Nudge(): $CancellablePromise<void> {
+    return $Call.ByID(1500160023);
 }
 
 /**

@@ -70,6 +70,8 @@ func Start(ctx context.Context, p profiles.Profile) (*Server, error) {
 			"-np", strconv.Itoa(p.MaxJobs),
 			"-c", strconv.Itoa(p.ContextPerJob * p.MaxJobs),
 			"--alias", "mihari",
+			// The model's chat template is what turns OpenAI tool definitions into its own format.
+			"--jinja",
 		}
 		path := model
 		if !isLocalPath(model) {
@@ -117,9 +119,14 @@ func Start(ctx context.Context, p profiles.Profile) (*Server, error) {
 	if err := s.cmd.Start(); err != nil {
 		return nil, fmt.Errorf("lancement de %s : %w", info.Label, err)
 	}
+	pid := s.cmd.Process.Pid
+	track(pid, info.Path)
 	s.done = make(chan struct{})
 	go func() {
 		_ = s.cmd.Wait()
+		// Its children may outlive it; the group goes down with it.
+		killGroup(pid)
+		untrack(pid)
 		close(s.done)
 	}()
 

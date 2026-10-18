@@ -11,6 +11,7 @@ export {
 } from "./models.js";
 
 export type {
+    Active,
     ChatResult,
     Snapshot
 } from "./models.js";

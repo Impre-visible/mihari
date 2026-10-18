@@ -17,3 +17,8 @@ func interrupt(cmd *exec.Cmd) {
 func kill(cmd *exec.Cmd) {
 	_ = exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(cmd.Process.Pid)).Run()
 }
+
+// Windows engines are not tracked across runs yet.
+func killGroup(int) {}
+
+func isProcess(int, string) bool { return false }

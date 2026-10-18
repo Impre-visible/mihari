@@ -34,4 +34,9 @@ export interface Todo {
      * Made on the Dev page rather than read from GitLab, so never marked done there.
      */
     "simulated": boolean;
+
+    /**
+     * The comment that mentioned the bot; 0 for a review request.
+     */
+    "noteId": number;
 }

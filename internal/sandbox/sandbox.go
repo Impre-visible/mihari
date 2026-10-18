@@ -240,16 +240,20 @@ func clip(s string) (string, bool) {
 	return s[:half] + "\n… [" + strconv.Itoa(len(s)-outputLimit) + " octets coupés] …\n" + s[len(s)-half:], true
 }
 
-// Close stops and removes the container.
-func (c *Container) Close() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	// Docker on Linux writes the mounted files as root; hand them back to the user
-	// before Mihari reads, commits or deletes them.
+// Chown hands the workspace back to the user. Docker on Linux writes the
+// mounted files as root, which Mihari must commit, push and delete.
+func (c *Container) Chown(ctx context.Context) {
 	if c.cli.kind == Docker && runtime.GOOS == "linux" {
 		owner := strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid())
 		_, _, _ = c.cli.run(ctx, nil, "exec", c.name, "chown", "-R", owner, Workdir)
 	}
+}
+
+// Close stops and removes the container.
+func (c *Container) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	c.Chown(ctx)
 	args := []string{"rm", "--force", c.name}
 	if c.cli.kind == Apple {
 		args = []string{"delete", "--force", c.name}

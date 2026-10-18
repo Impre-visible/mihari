@@ -61,7 +61,9 @@ type Service struct {
 	simulated []gitlab.Todo
 	// Simulated todos get negative ids so they never collide with GitLab's.
 	lastSimID int
-	wake      chan struct{}
+	// Receives the ready todos after each poll; set before startup.
+	OnReady func([]gitlab.Todo)
+	wake    chan struct{}
 }
 
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
@@ -128,6 +130,13 @@ func (s *Service) poll(ctx context.Context) {
 		s.sort(ctx, all)
 	}
 	s.publish()
+
+	s.mu.Lock()
+	ready := append([]gitlab.Todo{}, s.snapshot.Todos...)
+	s.mu.Unlock()
+	if s.OnReady != nil {
+		s.OnReady(ready)
+	}
 }
 
 // sort splits todos into ready, waiting and refused. Membership is read

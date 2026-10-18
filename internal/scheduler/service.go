@@ -54,9 +54,42 @@ type Service struct {
 	// Cancels a start in progress, so a settings change does not wait for a slow load.
 	cancelStart context.CancelFunc
 	wake        chan struct{}
+	// The schedule calls for another profile, but jobs still run on this one.
+	draining bool
+	// Reports whether jobs are running; set before startup.
+	Busy func() bool
+}
+
+// Active is what jobs need from the running engine.
+type Active struct {
+	Ready   bool
+	Profile profiles.Profile
+	URL     string
+	Model   string
+	// No new job should start: the engine changes once the running ones end.
+	Draining bool
+}
+
+func (s *Service) Active() Active {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a := Active{Ready: s.snapshot.State == StateReady, URL: s.snapshot.URL, Model: s.snapshot.Model, Draining: s.draining}
+	if s.current != nil {
+		a.Profile = *s.current
+	}
+	return a
+}
+
+// Nudge re-checks the schedule now, as when the last job of a drained profile ends.
+func (s *Service) Nudge() {
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
 }
 
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	engine.ReapOrphans()
 	s.wake = make(chan struct{}, 1)
 	s.snapshot = Snapshot{State: StateIdle, Since: time.Now()}
 	go s.run(ctx)
@@ -151,11 +184,19 @@ func (s *Service) reconcile(ctx context.Context) {
 
 	// An edited profile counts as a different one, so its engine restarts.
 	if scheduled && current != nil && reflect.DeepEqual(*current, want) {
+		s.setDraining(false)
 		return
 	}
 	if !scheduled && current == nil {
+		s.setDraining(false)
 		return
 	}
+	// Running jobs finish on the engine they started on.
+	if current != nil && s.Busy != nil && s.Busy() {
+		s.setDraining(true)
+		return
+	}
+	s.setDraining(false)
 
 	s.stop()
 	if !scheduled {
@@ -163,6 +204,12 @@ func (s *Service) reconcile(ctx context.Context) {
 		return
 	}
 	s.start(ctx, want)
+}
+
+func (s *Service) setDraining(on bool) {
+	s.mu.Lock()
+	s.draining = on
+	s.mu.Unlock()
 }
 
 func (s *Service) stop() {

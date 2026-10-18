@@ -9,6 +9,7 @@
   import { Service as Sandbox } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox";
   import type { Info as SandboxInfo } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox/models";
   import { Button, FormGroup, FormRow, Spinner } from "$lib/ui";
+  import Jobs from "./Jobs.svelte";
 
   const ACTIONS: Record<string, string> = {
     review_requested: "review demandée",
@@ -91,6 +92,8 @@
     {/if}
   {/if}
 </FormGroup>
+
+<Jobs {now} />
 
 <FormGroup title="Containers" class="mt-6">
   <div class="p-form-row gap-1.5">

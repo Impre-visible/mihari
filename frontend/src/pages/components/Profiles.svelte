@@ -43,6 +43,8 @@
     trigger: Trigger;
     label: string;
     extraArgs: string;
+    maxTurns: number;
+    maxMinutes: number;
   };
 
   const TRIGGERS: { value: Trigger; label: string }[] = [
@@ -85,6 +87,8 @@
       trigger: "ping",
       label: "",
       extraArgs: "",
+      maxTurns: 50,
+      maxMinutes: 30,
     };
   }
 
@@ -106,6 +110,8 @@
       trigger: v.trigger === "issues" ? "issues" : "ping",
       label: text(v.label),
       extraArgs: text(v.extraArgs),
+      maxTurns: count(v.maxTurns, 50),
+      maxMinutes: count(v.maxMinutes, 30),
     };
   }
 
@@ -176,6 +182,8 @@
       if (p.model.trim() === "") return `${name} : aucun modèle renseigné.`;
       if (p.prompt.trim() === "") return `${name} : le prompt est vide.`;
       if (!Number.isInteger(p.maxJobs) || p.maxJobs < 1) return `${name} : il faut au moins 1 job en parallèle.`;
+      if (!Number.isInteger(p.maxTurns) || p.maxTurns < 1) return `${name} : il faut au moins 1 tour par job.`;
+      if (!Number.isInteger(p.maxMinutes) || p.maxMinutes < 1) return `${name} : il faut au moins 1 minute par job.`;
       if (!Number.isInteger(p.contextPerJob) || p.contextPerJob < 4096) return `${name} : contexte trop petit.`;
       if (p.trigger === "issues" && p.label.trim() === "") return `${name} : indique le label des issues à traiter.`;
     }
@@ -351,6 +359,12 @@
           placeholder={engineOf(p)?.argsHint ?? ""}
           bind:value={p.extraArgs}
         />
+      </FormRow>
+      <FormRow label="Tours max par job" for="profile-{p.id}-turns">
+        <Stepper id="profile-{p.id}-turns" class="me-7 w-20" min={5} max={500} step={5} bind:value={p.maxTurns} />
+      </FormRow>
+      <FormRow label="Durée max par job (minutes)" for="profile-{p.id}-minutes">
+        <Stepper id="profile-{p.id}-minutes" class="me-7 w-20" min={5} max={600} step={5} bind:value={p.maxMinutes} />
       </FormRow>
       <FormRow label="Déclencheur">
         <SegmentedControl label="Déclencheur" class="me-7" options={TRIGGERS} bind:value={p.trigger} />

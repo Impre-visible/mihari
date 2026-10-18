@@ -2,9 +2,11 @@
 package gitlab
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"net/url"
@@ -94,14 +96,30 @@ func getAll[T any](ctx context.Context, base *url.URL, token, path string, query
 // call sends a request without a body and decodes the JSON answer into out,
 // when out is not nil. It returns GitLab's next page number, if any.
 func call(ctx context.Context, method string, base *url.URL, token, path string, query url.Values, out any) (string, error) {
+	return send(ctx, method, base, token, path, query, nil, out)
+}
+
+// send is call with an optional JSON body.
+func send(ctx context.Context, method string, base *url.URL, token, path string, query url.Values, body, out any) (string, error) {
 	endpoint := base.JoinPath(path)
 	endpoint.RawQuery = query.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, method, endpoint.String(), nil)
+	var reader io.Reader
+	if body != nil {
+		data, err := json.Marshal(body)
+		if err != nil {
+			return "", err
+		}
+		reader = bytes.NewReader(data)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint.String(), reader)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("PRIVATE-TOKEN", token)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -117,6 +135,18 @@ func call(ctx context.Context, method string, base *url.URL, token, path string,
 	case res.StatusCode == http.StatusNotFound:
 		return "", fmt.Errorf("introuvable sur l'instance, ou le bot n'y a pas accès")
 	case res.StatusCode < 200 || res.StatusCode > 299:
+		// GitLab explains validation errors (a bad line position, say) in "message".
+		var detail struct {
+			Message any `json:"message"`
+			Error   any `json:"error"`
+		}
+		_ = json.NewDecoder(res.Body).Decode(&detail)
+		if detail.Message != nil {
+			return "", fmt.Errorf("GitLab a refusé (%s) : %v", res.Status, detail.Message)
+		}
+		if detail.Error != nil {
+			return "", fmt.Errorf("GitLab a refusé (%s) : %v", res.Status, detail.Error)
+		}
 		return "", fmt.Errorf("réponse inattendue de l'instance : %s", res.Status)
 	}
 
