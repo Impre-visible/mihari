@@ -7,5 +7,6 @@ export {
 };
 
 export type {
+    Member,
     Todo
 } from "./models.js";

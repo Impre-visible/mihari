@@ -7,5 +7,7 @@ export {
 };
 
 export type {
-    Snapshot
+    Refusal,
+    Snapshot,
+    Waiting
 } from "./models.js";

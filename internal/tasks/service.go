@@ -5,11 +5,13 @@ import (
 	"context"
 	"errors"
 	"log"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/Impre-visible/mihari/internal/devmode"
 	"github.com/Impre-visible/mihari/internal/gitlab"
+	"github.com/Impre-visible/mihari/internal/projects"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -21,7 +23,14 @@ const UpdatedEvent = "tasks:updated"
 
 // Snapshot is the outcome of the latest poll.
 type Snapshot struct {
+	// Ready to run: an enabled project, and an author allowed to call the bot.
 	Todos []gitlab.Todo `json:"todos"`
+	// On switched-off projects: left pending on GitLab and read again each poll,
+	// so they run once the project is switched on.
+	Waiting []Waiting `json:"waiting"`
+	// Recently refused because the author may not call the bot; GitLab todos
+	// among them were marked done.
+	Refused []Refusal `json:"refused"`
 	// Zero until the first poll has finished.
 	PolledAt time.Time `json:"polledAt"`
 	// Set when the latest poll failed; Todos then still holds the last good list.
@@ -29,6 +38,19 @@ type Snapshot struct {
 	// GitLab has no URL or token yet, so polling is waiting for the settings.
 	NotConfigured bool `json:"notConfigured"`
 }
+
+type Waiting struct {
+	Todo   gitlab.Todo `json:"todo"`
+	Reason string      `json:"reason"`
+}
+
+type Refusal struct {
+	Todo gitlab.Todo `json:"todo"`
+	At   time.Time   `json:"at"`
+}
+
+// How many refusals the Status page keeps.
+const refusalHistory = 20
 
 // Service is exposed to the frontend through Wails bindings.
 type Service struct {
@@ -81,7 +103,7 @@ func (s *Service) run(ctx context.Context) {
 }
 
 func (s *Service) poll(ctx context.Context) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 
 	todos, err := gitlab.PendingTodos(ctx)
@@ -99,14 +121,72 @@ func (s *Service) poll(ctx context.Context) {
 	default:
 		s.polled = todos
 	}
+	all := append(append([]gitlab.Todo{}, s.polled...), s.simulated...)
 	s.mu.Unlock()
+
+	if err == nil {
+		s.sort(ctx, all)
+	}
 	s.publish()
 }
 
-// publish merges the polled and simulated todos and sends the snapshot.
+// sort splits todos into ready, waiting and refused. Membership is read
+// fresh on each poll, so a role change applies at once.
+func (s *Service) sort(ctx context.Context, todos []gitlab.Todo) {
+	config, err := projects.Load()
+	if err != nil {
+		log.Printf("load projects: %v", err)
+		return
+	}
+	members := map[int][]gitlab.Member{}
+	memberErrors := map[int]error{}
+
+	ready := []gitlab.Todo{}
+	waiting := []Waiting{}
+	var refused []Refusal
+	for _, todo := range todos {
+		project := config.Project(todo.ProjectID)
+		if !project.Enabled {
+			waiting = append(waiting, Waiting{Todo: todo, Reason: "projet éteint"})
+			continue
+		}
+		if _, ok := members[todo.ProjectID]; !ok && memberErrors[todo.ProjectID] == nil {
+			list, err := gitlab.ProjectMembers(ctx, todo.ProjectID)
+			members[todo.ProjectID], memberErrors[todo.ProjectID] = list, err
+		}
+		if err := memberErrors[todo.ProjectID]; err != nil {
+			waiting = append(waiting, Waiting{Todo: todo, Reason: "membres illisibles : " + err.Error()})
+			continue
+		}
+		if project.Authorizes(todo.Author, members[todo.ProjectID]) {
+			ready = append(ready, todo)
+			continue
+		}
+		// Refused in silence: nothing is posted, the todo just leaves the bot's list.
+		if !todo.Simulated {
+			if err := gitlab.MarkTodoDone(ctx, todo.ID); err != nil {
+				log.Printf("mark todo %d done: %v", todo.ID, err)
+				continue
+			}
+		}
+		refused = append(refused, Refusal{Todo: todo, At: time.Now()})
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.snapshot.Todos, s.snapshot.Waiting = ready, waiting
+	for _, r := range refused {
+		s.dropSimulated(r.Todo.ID)
+	}
+	s.snapshot.Refused = append(refused, s.snapshot.Refused...)
+	if len(s.snapshot.Refused) > refusalHistory {
+		s.snapshot.Refused = s.snapshot.Refused[:refusalHistory]
+	}
+}
+
+// publish sends the snapshot to the frontend.
 func (s *Service) publish() {
 	s.mu.Lock()
-	s.snapshot.Todos = append(append([]gitlab.Todo{}, s.polled...), s.simulated...)
 	snapshot := s.snapshot
 	s.mu.Unlock()
 
@@ -132,20 +212,22 @@ func (s *Service) Simulate(mrURL, author, body string) (gitlab.Todo, error) {
 	todo.ID = s.lastSimID
 	s.simulated = append(s.simulated, todo)
 	s.mu.Unlock()
-	s.publish()
+	// Sorting it needs the project's members, which the poll reads.
+	s.PollNow()
 	return todo, nil
 }
 
 // RemoveSimulated drops a simulated todo; GitLab todos are left alone.
 func (s *Service) RemoveSimulated(id int) {
 	s.mu.Lock()
-	kept := s.simulated[:0]
-	for _, t := range s.simulated {
-		if t.ID != id {
-			kept = append(kept, t)
-		}
-	}
-	s.simulated = kept
+	s.dropSimulated(id)
+	s.snapshot.Todos = slices.DeleteFunc(s.snapshot.Todos, func(t gitlab.Todo) bool { return t.ID == id })
+	s.snapshot.Waiting = slices.DeleteFunc(s.snapshot.Waiting, func(w Waiting) bool { return w.Todo.ID == id })
 	s.mu.Unlock()
 	s.publish()
+}
+
+// dropSimulated forgets a simulated todo; s.mu must be held.
+func (s *Service) dropSimulated(id int) {
+	s.simulated = slices.DeleteFunc(s.simulated, func(t gitlab.Todo) bool { return t.ID == id })
 }

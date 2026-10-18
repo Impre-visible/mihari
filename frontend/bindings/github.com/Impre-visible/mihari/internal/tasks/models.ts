@@ -5,11 +5,31 @@
 // @ts-ignore: Unused imports
 import * as gitlab$0 from "../gitlab/models.js";
 
+export interface Refusal {
+    "todo": gitlab$0.Todo;
+    "at": string;
+}
+
 /**
  * Snapshot is the outcome of the latest poll.
  */
 export interface Snapshot {
+    /**
+     * Ready to run: an enabled project, and an author allowed to call the bot.
+     */
     "todos": gitlab$0.Todo[] | null;
+
+    /**
+     * On switched-off projects: left pending on GitLab and read again each poll,
+     * so they run once the project is switched on.
+     */
+    "waiting": Waiting[] | null;
+
+    /**
+     * Recently refused because the author may not call the bot; GitLab todos
+     * among them were marked done.
+     */
+    "refused": Refusal[] | null;
 
     /**
      * Zero until the first poll has finished.
@@ -25,4 +45,9 @@ export interface Snapshot {
      * GitLab has no URL or token yet, so polling is waiting for the settings.
      */
     "notConfigured": boolean;
+}
+
+export interface Waiting {
+    "todo": gitlab$0.Todo;
+    "reason": string;
 }

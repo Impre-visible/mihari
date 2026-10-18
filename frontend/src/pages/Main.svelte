@@ -1,18 +1,20 @@
 <script lang="ts">
   import type { Component } from "svelte";
-  import { ClockIcon, CpuIcon, GaugeIcon, GitlabLogoIcon, WrenchIcon } from "phosphor-svelte";
+  import { ClockIcon, CpuIcon, GaugeIcon, FolderIcon, GitlabLogoIcon, WrenchIcon } from "phosphor-svelte";
   import { AppWindow, Sidebar, SidebarItem, SidebarSection } from "$lib/ui";
   import Status from "./components/Status.svelte";
   import Profiles from "./components/Profiles.svelte";
   import Schedule from "./components/Schedule.svelte";
   import Gitlab from "./components/Gitlab.svelte";
   import Dev from "./components/Dev.svelte";
+  import Projects from "./components/Projects.svelte";
 
   type Section = { id: string; label: string; icon: typeof GaugeIcon; component: Component };
 
   const sections: Section[] = [
     { id: "status", label: "État", icon: GaugeIcon, component: Status },
     { id: "gitlab", label: "GitLab", icon: GitlabLogoIcon, component: Gitlab },
+    { id: "projects", label: "Projets", icon: FolderIcon, component: Projects },
     { id: "profiles", label: "Profils", icon: CpuIcon, component: Profiles },
     { id: "schedule", label: "Planning", icon: ClockIcon, component: Schedule },
   ];

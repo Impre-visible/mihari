@@ -69,13 +69,10 @@ func PendingTodos(ctx context.Context) ([]Todo, error) {
 		return nil, err
 	}
 
-	query := url.Values{
-		"state":    {"pending"},
-		"type":     {"MergeRequest"},
-		"per_page": {"100"},
-	}
-	var items []apiTodo
-	if err := get(ctx, base, token, "api/v4/todos", query, &items); err != nil {
+	// Every page: todos left pending on switched-off projects must not hide new ones.
+	query := url.Values{"state": {"pending"}, "type": {"MergeRequest"}}
+	items, err := getAll[apiTodo](ctx, base, token, "api/v4/todos", query)
+	if err != nil {
 		return nil, err
 	}
 

@@ -3,6 +3,7 @@
   import { Browser, Events } from "@wailsio/runtime";
   import { Service as Tasks } from "../../../bindings/github.com/Impre-visible/mihari/internal/tasks";
   import type { Snapshot } from "../../../bindings/github.com/Impre-visible/mihari/internal/tasks/models";
+  import type { Todo } from "../../../bindings/github.com/Impre-visible/mihari/internal/gitlab/models";
   import { Service as Scheduler } from "../../../bindings/github.com/Impre-visible/mihari/internal/scheduler";
   import type { Snapshot as EngineSnapshot } from "../../../bindings/github.com/Impre-visible/mihari/internal/scheduler/models";
   import { Button, FormGroup, FormRow, Spinner } from "$lib/ui";
@@ -21,6 +22,8 @@
   // Go's zero time.Time means no poll has finished yet.
   let polledAt = $derived(snapshot && !snapshot.polledAt.startsWith("0001") ? Date.parse(snapshot.polledAt) : null);
   let todos = $derived(snapshot?.todos ?? []);
+  let waiting = $derived(snapshot?.waiting ?? []);
+  let refused = $derived(snapshot?.refused ?? []);
 
   Scheduler.Snapshot()
     .then((s) => (engine = s))
@@ -99,15 +102,43 @@
   </Button>
 </div>
 
-<FormGroup title="En attente ({todos.length})" class="mt-4">
+{#snippet todoRow(todo: Todo, extra: string)}
+  <FormRow
+    label={todo.title}
+    detail="{todo.project}!{todo.mrIid} · @{todo.author} · {ACTIONS[todo.action] ?? todo.action}{todo.simulated
+      ? ' · simulée'
+      : ''}{extra}"
+    chevron
+    onclick={() => Browser.OpenURL(todo.url)}
+  />
+{/snippet}
+
+<FormGroup title="Prêtes ({todos.length})" class="mt-4">
   {#each todos as todo (todo.id)}
-    <FormRow
-      label={todo.title}
-      detail="{todo.project}!{todo.mrIid} · {ACTIONS[todo.action] ?? todo.action}{todo.simulated ? ' · simulée' : ''}"
-      chevron
-      onclick={() => Browser.OpenURL(todo.url)}
-    />
+    {@render todoRow(todo, "")}
   {:else}
     <p class="p-body py-4 text-center text-tertiary-label">Aucune tâche</p>
   {/each}
 </FormGroup>
+
+{#if waiting.length > 0}
+  <FormGroup
+    title="Mises de côté ({waiting.length})"
+    footer="Elles restent en attente sur GitLab et repartiront quand leur projet sera allumé dans Projets."
+  >
+    {#each waiting as w (w.todo.id)}
+      {@render todoRow(w.todo, ` · ${w.reason}`)}
+    {/each}
+  </FormGroup>
+{/if}
+
+{#if refused.length > 0}
+  <FormGroup
+    title="Refusées récemment"
+    footer="L'auteur n'a pas le rôle requis ni d'autorisation dans Projets. La todo a été marquée faite, sans rien poster."
+  >
+    {#each refused as r (r.todo.id)}
+      {@render todoRow(r.todo, ` · ${ago(Date.parse(r.at))}`)}
+    {/each}
+  </FormGroup>
+{/if}

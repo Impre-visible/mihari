@@ -3,6 +3,7 @@
   import { Events } from "@wailsio/runtime";
   import { Service as Tasks } from "../../../bindings/github.com/Impre-visible/mihari/internal/tasks";
   import type { Todo } from "../../../bindings/github.com/Impre-visible/mihari/internal/gitlab/models";
+  import type { Snapshot } from "../../../bindings/github.com/Impre-visible/mihari/internal/tasks/models";
   import { Service as Scheduler } from "../../../bindings/github.com/Impre-visible/mihari/internal/scheduler";
   import type {
     ChatResult,
@@ -26,17 +27,21 @@
   let author = $state("");
   let mention = $state("");
   let pingStatus = $state<Status>({ kind: "idle" });
-  let simulated = $state<Todo[]>([]);
+  let simulated = $state<{ todo: Todo; where: string }[]>([]);
 
-  function keepSimulated(todos: Todo[] | null) {
-    simulated = (todos ?? []).filter((t) => t.simulated);
+  // Simulated todos go through the same sorting as real ones.
+  function keepSimulated(s: Snapshot) {
+    simulated = [
+      ...(s.todos ?? []).map((todo) => ({ todo, where: "prête" })),
+      ...(s.waiting ?? []).map((w) => ({ todo: w.todo, where: w.reason })),
+    ].filter((entry) => entry.todo.simulated);
   }
 
   async function simulate() {
     pingStatus = { kind: "busy", label: "Lecture de la MR…" };
     try {
       const todo = await Tasks.Simulate(mrURL.trim(), author.trim(), mention);
-      pingStatus = { kind: "ok", message: `Tâche ajoutée : ${todo.project}!${todo.mrIid}.` };
+      pingStatus = { kind: "ok", message: `Tâche ajoutée : ${todo.project}!${todo.mrIid}. Voir la page État.` };
     } catch (err) {
       pingStatus = { kind: "error", message: errorMessage(err) };
     }
@@ -61,11 +66,11 @@
     }
   }
 
-  Tasks.Snapshot().then((s) => keepSimulated(s.todos));
+  Tasks.Snapshot().then(keepSimulated);
   Scheduler.Snapshot().then((s) => (engine = s));
 
   $effect(() => {
-    const offTasks = Events.On("tasks:updated", (event) => keepSimulated(event.data.todos));
+    const offTasks = Events.On("tasks:updated", (event) => keepSimulated(event.data));
     const offEngine = Events.On("engine:updated", (event) => (engine = event.data));
     return () => {
       offTasks();
@@ -137,8 +142,8 @@
 
 {#if simulated.length > 0}
   <FormGroup title="Tâches simulées ({simulated.length})" class="mt-6">
-    {#each simulated as todo (todo.id)}
-      <FormRow label={todo.title} detail="{todo.project}!{todo.mrIid} · @{todo.author}">
+    {#each simulated as { todo, where } (todo.id)}
+      <FormRow label={todo.title} detail="{todo.project}!{todo.mrIid} · @{todo.author} · {where}">
         <Button
           size="small"
           variant="borderless"
