@@ -1,29 +1,19 @@
 <script lang="ts">
+  import type { Component } from "svelte";
   import { ClockIcon, CpuIcon, GaugeIcon, GitlabLogoIcon } from "phosphor-svelte";
-  import { AppWindow, Box, Sidebar, SidebarItem, SidebarSection } from "$lib/ui";
+  import { AppWindow, Sidebar, SidebarItem, SidebarSection } from "$lib/ui";
+  import Status from "./components/Status.svelte";
+  import Profiles from "./components/Profiles.svelte";
+  import Schedule from "./components/Schedule.svelte";
+  import Gitlab from "./components/Gitlab.svelte";
 
-  type Section = { id: string; label: string; description: string; icon: typeof GaugeIcon };
+  type Section = { id: string; label: string; icon: typeof GaugeIcon; component: Component };
 
   const sections: Section[] = [
-    { id: "status", label: "État", icon: GaugeIcon, description: "Modèle chargé, jobs en cours et en attente." },
-    {
-      id: "profiles",
-      label: "Profils",
-      icon: CpuIcon,
-      description: "Le modèle de journée, le modèle de nuit et leurs jobs en parallèle.",
-    },
-    {
-      id: "schedule",
-      label: "Planning",
-      icon: ClockIcon,
-      description: "Les plages horaires et le profil actif sur chacune.",
-    },
-    {
-      id: "gitlab",
-      label: "GitLab",
-      icon: GitlabLogoIcon,
-      description: "L'URL de l'instance, le compte bot et son token.",
-    },
+    { id: "status", label: "État", icon: GaugeIcon, component: Status },
+    { id: "profiles", label: "Profils", icon: CpuIcon, component: Profiles },
+    { id: "schedule", label: "Planning", icon: ClockIcon, component: Schedule },
+    { id: "gitlab", label: "GitLab", icon: GitlabLogoIcon, component: Gitlab },
   ];
 
   let activeId = $state(sections[0].id);
@@ -51,9 +41,5 @@
     </Sidebar>
   {/snippet}
 
-  <p class="p-body text-secondary-label">{active.description}</p>
-
-  <Box class="mt-6">
-    <p class="py-8 text-center text-tertiary-label">À venir</p>
-  </Box>
+  <active.component />
 </AppWindow>
