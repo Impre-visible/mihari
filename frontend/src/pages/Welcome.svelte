@@ -2,24 +2,9 @@
   let { onstart }: { onstart: () => void } = $props();
 
   const mihariVersion = "v1.0.0";
-
-  const steps = [
-    {
-      title: "Profils de modèles",
-      description: "Un modèle de journée, un modèle de nuit et le nombre de jobs en parallèle.",
-    },
-    {
-      title: "Planning",
-      description: "Les plages horaires et le profil actif sur chacune.",
-    },
-    {
-      title: "Connexion GitLab",
-      description: "L'URL de l'instance, le compte bot et son token, rangé dans le trousseau.",
-    },
-  ];
 </script>
 
-<div class="flex min-h-screen flex-col bg-ink text-text antialiased">
+<div class="flex flex-col bg-ink text-text antialiased min-h-screen">
   <!-- Halo décoratif derrière le titre. -->
   <div
     aria-hidden="true"
@@ -36,24 +21,6 @@
       Des LLM locaux qui relisent vos merge requests GitLab le jour et écrivent des tests la nuit.
       Le code ne quitte jamais la machine.
     </p>
-
-    <section class="mt-12">
-      <h2 class="mb-4 text-xs font-medium tracking-widest text-muted uppercase">Pour commencer</h2>
-
-      <ol class="grid gap-4 sm:grid-cols-3">
-        {#each steps as step, i}
-          <li class="rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-            <span
-              class="mb-4 flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-sm font-medium"
-            >
-              {i + 1}
-            </span>
-            <h3 class="font-medium">{step.title}</h3>
-            <p class="mt-1 text-sm text-pretty text-muted">{step.description}</p>
-          </li>
-        {/each}
-      </ol>
-    </section>
 
     <button
       type="button"
