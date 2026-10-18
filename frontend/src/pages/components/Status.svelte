@@ -9,6 +9,7 @@
   import { Service as Sandbox } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox";
   import type { Info as SandboxInfo } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox/models";
   import { Button, FormGroup, FormRow, Spinner } from "$lib/ui";
+  import { ref } from "$lib/refs";
   import Jobs from "./Jobs.svelte";
 
   const ACTIONS: Record<string, string> = {
@@ -141,7 +142,7 @@
 {#snippet todoRow(todo: Todo, extra: string)}
   <FormRow
     label={todo.title}
-    detail="{todo.project}!{todo.mrIid} · @{todo.author} · {ACTIONS[todo.action] ?? todo.action}{todo.simulated
+    detail="{ref(todo.project, todo.targetType, todo.iid)} · @{todo.author} · {ACTIONS[todo.action] ?? todo.action}{todo.simulated
       ? ' · simulée'
       : ''}{extra}"
     chevron

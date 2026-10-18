@@ -12,6 +12,7 @@
   import type { Summary } from "../../../bindings/github.com/Impre-visible/mihari/internal/jobs/models";
   import type { Event as JobEvent } from "../../../bindings/github.com/Impre-visible/mihari/internal/agent/models";
   import { Button, FormGroup, Spinner } from "$lib/ui";
+  import { ref } from "$lib/refs";
 
   type Props = { now: number };
   let { now }: Props = $props();
@@ -118,7 +119,7 @@
     <button type="button" class="flex min-w-0 flex-1 flex-col items-start py-1.5 text-start" onclick={() => open(j.id)}>
       <span class="w-full truncate">{j.title}</span>
       <span class="p-subhead-2 w-full truncate text-secondary-label">
-        {j.project}!{j.mrIid} · @{j.author} · {STATES[j.state] ?? j.state}{duration(j) ? ` · ${duration(j)}` : ""}{j.simulated
+        {ref(j.project, j.targetType, j.iid)}{j.kind === "issues" ? " · label" : ""} · @{j.author} · {STATES[j.state] ?? j.state}{duration(j) ? ` · ${duration(j)}` : ""}{j.simulated
           ? " · simulé"
           : ""}
       </span>
@@ -141,14 +142,20 @@
     </div>
     <Button size="small" variant="borderless" onclick={() => Browser.OpenURL(current.url)}>
       <ArrowSquareOutIcon size={14} aria-hidden="true" />
-      MR
+      {current.targetType === "Issue" ? "Issue" : "MR"}
     </Button>
+    {#if current.openedMr}
+      <Button size="small" variant="borderless" onclick={() => Browser.OpenURL(current.openedMr)}>
+        <ArrowSquareOutIcon size={14} aria-hidden="true" />
+        MR ouverte
+      </Button>
+    {/if}
     {#if current.state === "running" || current.state === "queued"}
       <Button size="small" onclick={() => Jobs.Cancel(current.id)}>Annuler</Button>
     {/if}
   </div>
   <p class="p-subhead-2 mt-1 ms-2.5 text-secondary-label">
-    {current.project}!{current.mrIid} · @{current.author} · {STATES[current.state]}{current.profile
+    {ref(current.project, current.targetType, current.iid)} · @{current.author} · {STATES[current.state]}{current.profile
       ? ` · ${current.profile}`
       : ""}{duration(current) ? ` · ${duration(current)}` : ""}{current.turns ? ` · ${current.turns} tours` : ""}
   </p>

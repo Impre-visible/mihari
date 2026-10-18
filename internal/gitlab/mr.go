@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // MergeRequest is what a job needs to know about the merge request it works on.
@@ -52,7 +50,7 @@ func NewClient(projectID int) (*Client, error) {
 }
 
 func (c *Client) mrPath(iid int, rest string) string {
-	return "api/v4/projects/" + strconv.Itoa(c.ProjectID) + "/merge_requests/" + strconv.Itoa(iid) + rest
+	return c.path(Target{Type: MergeRequestTarget, IID: iid}, rest)
 }
 
 func (c *Client) MergeRequest(ctx context.Context, iid int) (MergeRequest, error) {
@@ -99,121 +97,6 @@ func (c *Client) Diffs(ctx context.Context, iid int) ([]FileDiff, error) {
 	return getAll[FileDiff](ctx, c.base, c.token, c.mrPath(iid, "/diffs"), nil)
 }
 
-type Note struct {
-	ID        int       `json:"id"`
-	Body      string    `json:"body"`
-	Author    string    `json:"author"`
-	CreatedAt time.Time `json:"createdAt"`
-	// Set for a comment on a diff line.
-	Path string `json:"path"`
-	Line int    `json:"line"`
-}
-
-type Discussion struct {
-	ID    string `json:"id"`
-	Notes []Note `json:"notes"`
-}
-
-type apiNote struct {
-	ID        int       `json:"id"`
-	Body      string    `json:"body"`
-	System    bool      `json:"system"`
-	CreatedAt time.Time `json:"created_at"`
-	Author    struct {
-		Username string `json:"username"`
-	} `json:"author"`
-	Position *struct {
-		NewPath string `json:"new_path"`
-		NewLine int    `json:"new_line"`
-		OldLine int    `json:"old_line"`
-	} `json:"position"`
-}
-
-type apiDiscussion struct {
-	ID    string    `json:"id"`
-	Notes []apiNote `json:"notes"`
-}
-
-// convert drops GitLab's system notes ("added 2 commits"…).
-func (d apiDiscussion) convert() Discussion {
-	disc := Discussion{ID: d.ID}
-	for _, n := range d.Notes {
-		if n.System {
-			continue
-		}
-		note := Note{ID: n.ID, Body: n.Body, Author: n.Author.Username, CreatedAt: n.CreatedAt}
-		if n.Position != nil {
-			note.Path, note.Line = n.Position.NewPath, cmp.Or(n.Position.NewLine, n.Position.OldLine)
-		}
-		disc.Notes = append(disc.Notes, note)
-	}
-	return disc
-}
-
-// Discussions returns every thread of the merge request with at least one comment.
-func (c *Client) Discussions(ctx context.Context, iid int) ([]Discussion, error) {
-	items, err := getAll[apiDiscussion](ctx, c.base, c.token, c.mrPath(iid, "/discussions"), nil)
-	if err != nil {
-		return nil, err
-	}
-	var out []Discussion
-	for _, d := range items {
-		if disc := d.convert(); len(disc.Notes) > 0 {
-			out = append(out, disc)
-		}
-	}
-	return out, nil
-}
-
-// Discussion reads a single thread, cheap enough to watch while a job runs.
-func (c *Client) Discussion(ctx context.Context, iid int, id string) (Discussion, error) {
-	var d apiDiscussion
-	err := get(ctx, c.base, c.token, c.mrPath(iid, "/discussions/"+url.PathEscape(id)), nil, &d)
-	return d.convert(), err
-}
-
-// DiscussionOf finds the thread a note belongs to.
-func DiscussionOf(discussions []Discussion, noteID int) (Discussion, bool) {
-	for _, d := range discussions {
-		for _, n := range d.Notes {
-			if n.ID == noteID {
-				return d, true
-			}
-		}
-	}
-	return Discussion{}, false
-}
-
-var noteAnchor = regexp.MustCompile(`#note_(\d+)$`)
-
-// NoteIDFromURL reads the note a todo points to, 0 for none.
-func NoteIDFromURL(u string) int {
-	if m := noteAnchor.FindStringSubmatch(u); m != nil {
-		id, _ := strconv.Atoi(m[1])
-		return id
-	}
-	return 0
-}
-
-// Comment posts a new top-level comment.
-func (c *Client) Comment(ctx context.Context, iid int, body string) (Note, error) {
-	var n struct {
-		ID int `json:"id"`
-	}
-	_, err := send(ctx, http.MethodPost, c.base, c.token, c.mrPath(iid, "/notes"), nil, map[string]string{"body": body}, &n)
-	return Note{ID: n.ID, Body: body, Author: c.Bot}, err
-}
-
-// Reply answers inside an existing thread.
-func (c *Client) Reply(ctx context.Context, iid int, discussionID, body string) (Note, error) {
-	var n struct {
-		ID int `json:"id"`
-	}
-	path := c.mrPath(iid, "/discussions/"+url.PathEscape(discussionID)+"/notes")
-	_, err := send(ctx, http.MethodPost, c.base, c.token, path, nil, map[string]string{"body": body}, &n)
-	return Note{ID: n.ID, Body: body, Author: c.Bot}, err
-}
-
 // CommentLine starts a thread on a line of the diff: a line of the new file,
 // or of the old one for a removed line. GitLab rejects lines outside the diff.
 func (c *Client) CommentLine(ctx context.Context, mr MergeRequest, oldPath, newPath string, newLine, oldLine int, body string) error {
@@ -233,20 +116,6 @@ func (c *Client) CommentLine(ctx context.Context, mr MergeRequest, oldPath, newP
 	}
 	_, err := send(ctx, http.MethodPost, c.base, c.token, c.mrPath(mr.IID, "/discussions"), nil,
 		map[string]any{"body": body, "position": position}, nil)
-	return err
-}
-
-// React adds an emoji to the merge request and returns the award to remove it later.
-func (c *Client) React(ctx context.Context, iid int, emoji string) (int, error) {
-	var award struct {
-		ID int `json:"id"`
-	}
-	_, err := send(ctx, http.MethodPost, c.base, c.token, c.mrPath(iid, "/award_emoji"), url.Values{"name": {emoji}}, nil, &award)
-	return award.ID, err
-}
-
-func (c *Client) Unreact(ctx context.Context, iid, awardID int) error {
-	_, err := call(ctx, http.MethodDelete, c.base, c.token, c.mrPath(iid, "/award_emoji/"+strconv.Itoa(awardID)), nil, nil)
 	return err
 }
 

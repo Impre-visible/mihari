@@ -14,6 +14,7 @@
   import { Service as Sandbox } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox";
   import type { TryResult } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox/models";
   import { Button, Checkbox, FormGroup, FormRow, Select, Spinner, TextArea, TextField } from "$lib/ui";
+  import { ref } from "$lib/refs";
 
   type Status =
     | { kind: "idle" }
@@ -45,7 +46,7 @@
     pingStatus = { kind: "busy", label: "Lecture de la MR…" };
     try {
       const todo = await Tasks.Simulate(mrURL.trim(), author.trim(), mention);
-      pingStatus = { kind: "ok", message: `Tâche ajoutée : ${todo.project}!${todo.mrIid}. Voir la page État.` };
+      pingStatus = { kind: "ok", message: `Tâche ajoutée : ${ref(todo.project, todo.targetType, todo.iid)}. Voir la page État.` };
     } catch (err) {
       pingStatus = { kind: "error", message: errorMessage(err) };
     }
@@ -137,14 +138,14 @@
 >
   <FormGroup
     title="Simuler un ping"
-    footer="Crée la tâche qu'un ping créerait, sans rien poster sur GitLab. Sans mention, c'est une demande de review."
+    footer="Crée la tâche qu'un ping créerait, sans rien poster sur GitLab. Sur une MR, sans texte, c'est une demande de review."
   >
-    <FormRow label="URL de la MR" for="dev-mr">
+    <FormRow label="URL de la MR ou de l'issue" for="dev-mr">
       <TextField
         id="dev-mr"
         type="url"
         class="w-96"
-        placeholder="https://gitlab.com/groupe/projet/-/merge_requests/1"
+        placeholder="https://gitlab.com/groupe/projet/-/merge_requests/1 ou /-/issues/1"
         bind:value={mrURL}
       />
     </FormRow>
@@ -174,7 +175,7 @@
 {#if simulated.length > 0}
   <FormGroup title="Tâches simulées ({simulated.length})" class="mt-6">
     {#each simulated as { todo, where } (todo.id)}
-      <FormRow label={todo.title} detail="{todo.project}!{todo.mrIid} · @{todo.author} · {where}">
+      <FormRow label={todo.title} detail="{ref(todo.project, todo.targetType, todo.iid)} · @{todo.author} · {where}">
         <Button
           size="small"
           variant="borderless"

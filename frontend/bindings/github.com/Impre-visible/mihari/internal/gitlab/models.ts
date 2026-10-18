@@ -8,7 +8,20 @@ export interface Member {
 }
 
 /**
- * Todo is a pending item of the bot's GitLab to-do list on a merge request.
+ * TargetType is GitLab's name for what a comment thread hangs on.
+ */
+export enum TargetType {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    MergeRequestTarget = "MergeRequest",
+    IssueTarget = "Issue",
+};
+
+/**
+ * Todo is a pending item of the bot's GitLab to-do list, on a merge request or an issue.
  */
 export interface Todo {
     "id": number;
@@ -17,9 +30,14 @@ export interface Todo {
      * Why the bot got the todo: review_requested, assigned, mentioned or directly_addressed.
      */
     "action": string;
+    "targetType": TargetType;
     "project": string;
     "projectId": number;
-    "mrIid": number;
+
+    /**
+     * Of the merge request or the issue.
+     */
+    "iid": number;
     "title": string;
     "url": string;
     "author": string;

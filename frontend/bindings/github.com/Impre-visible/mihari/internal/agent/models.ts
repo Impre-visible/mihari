@@ -14,3 +14,23 @@ export interface Event {
     "title": string;
     "text": string;
 }
+
+/**
+ * Kind is what started a job, which decides some of the tools it gets.
+ */
+export enum Kind {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    /**
+     * A mention or a review request, answered in its thread.
+     */
+    KindPing = "ping",
+
+    /**
+     * An issue carrying the profile's label, worked through at night.
+     */
+    KindIssues = "issues",
+};

@@ -6,6 +6,10 @@ export {
     Service
 };
 
+export {
+    TargetType
+} from "./models.js";
+
 export type {
     Member,
     Todo

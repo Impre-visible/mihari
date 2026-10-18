@@ -12,7 +12,9 @@ import (
 type Kind string
 
 const (
-	KindPing   Kind = "ping"
+	// A mention or a review request, answered in its thread.
+	KindPing Kind = "ping"
+	// An issue carrying the profile's label, worked through at night.
 	KindIssues Kind = "issues"
 )
 
@@ -27,18 +29,24 @@ type Env struct {
 	Kind   Kind
 	Runner Runner
 	GitLab *gitlab.Client
-	MR     gitlab.MergeRequest
-	// Thread of the comment that started the job; "" for a review request,
-	// whose answer goes in a new comment.
+	// Where the request came from: a merge request or an issue.
+	Target gitlab.Target
+	// The merge request worked on: the target, or the one the agent opened.
+	MR    gitlab.MergeRequest
+	Issue *gitlab.Issue
+	// Thread of the comment that started the job; "" when answers go in a new comment.
 	ThreadID  string
 	Requester string
-	// Commits the workspace and pushes it to the merge request's branch.
+	// Commits the workspace and pushes it to the job's branch; nil where pushing is not allowed.
 	Push func(ctx context.Context, message string) (string, error)
+	// Pushes the job's branch and opens a draft merge request; nil where not allowed.
+	OpenMR func(ctx context.Context, title, description string) (gitlab.MergeRequest, error)
 
 	// Set by tools.
 	Replied  bool
 	Finished *Finish
 	Pushes   []string
+	OpenedMR *gitlab.MergeRequest
 }
 
 // Finish is how the model ends the job.

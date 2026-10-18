@@ -49,11 +49,6 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 		emit(Event{At: time.Now(), Kind: kind, Title: title, Text: text})
 	}
 
-	tools := toolsFor(env)
-	byName := map[string]Tool{}
-	for _, t := range tools {
-		byName[t.Name()] = t
-	}
 	messages := []message{{Role: "system", Content: system}, {Role: "user", Content: task}}
 	say("system", "Prompt", system)
 	say("task", "Demande", task)
@@ -66,6 +61,12 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 			return Outcome{Turns: turn - 1}, fmt.Errorf("limite de %d tours atteinte", cfg.MaxTurns)
 		}
 		messages = fitContext(messages, cfg.ContextTokens, charsPerToken)
+		// Recomputed each turn: opening a merge request makes its tools available.
+		tools := toolsFor(env)
+		byName := map[string]Tool{}
+		for _, t := range tools {
+			byName[t.Name()] = t
+		}
 
 		res, err := chat(ctx, cfg.URL, cfg.Model, messages, tools)
 		if err != nil {

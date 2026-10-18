@@ -1,24 +1,20 @@
-// Package jobs turns ready todos into agent runs: one job per mention or
-// review request, at most the active profile's MaxJobs at once, one at a time
-// per merge request.
+// Package jobs turns work into agent runs. A ping profile runs one job per
+// mention or review request, one at a time per merge request or issue. An
+// issues profile works through the issues carrying its label, one at a time
+// per project. Either way, at most the profile's MaxJobs run at once.
 package jobs
 
 import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/Impre-visible/mihari/internal/agent"
 	"github.com/Impre-visible/mihari/internal/gitlab"
 	"github.com/Impre-visible/mihari/internal/profiles"
-	"github.com/Impre-visible/mihari/internal/projects"
-	"github.com/Impre-visible/mihari/internal/sandbox"
 	"github.com/Impre-visible/mihari/internal/scheduler"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -30,11 +26,11 @@ const (
 	TranscriptEvent = "job:event"
 )
 
-// Finished jobs kept for the Status page.
+// Finished jobs kept in memory for the Status page; more are on disk.
 const historySize = 50
 
-// How often a running job looks for new replies in its thread.
-const threadPoll = 30 * time.Second
+// How often a running job looks for new comments, and an issues profile for new issues.
+const pollEvery = 30 * time.Second
 
 type State string
 
@@ -47,12 +43,16 @@ const (
 )
 
 type Summary struct {
-	ID        int       `json:"id"`
-	State     State     `json:"state"`
-	Project   string    `json:"project"`
-	MRIID     int       `json:"mrIid"`
-	Title     string    `json:"title"`
-	URL       string    `json:"url"`
+	ID         int               `json:"id"`
+	Kind       agent.Kind        `json:"kind"`
+	State      State             `json:"state"`
+	TargetType gitlab.TargetType `json:"targetType"`
+	Project    string            `json:"project"`
+	ProjectID  int               `json:"projectId"`
+	IID        int               `json:"iid"`
+	Title      string            `json:"title"`
+	URL        string            `json:"url"`
+	// Who asked: the author of the mention, or who put the label.
 	Author    string    `json:"author"`
 	Request   string    `json:"request"`
 	Simulated bool      `json:"simulated"`
@@ -63,6 +63,16 @@ type Summary struct {
 	Turns     int       `json:"turns"`
 	Error     string    `json:"error"`
 	Result    string    `json:"result"`
+	// The merge request the agent opened, if any.
+	OpenedMR string `json:"openedMr"`
+}
+
+func (s Summary) target() gitlab.Target {
+	return gitlab.Target{Type: s.TargetType, IID: s.IID}
+}
+
+func (s Summary) finished() bool {
+	return s.State != StateQueued && s.State != StateRunning
 }
 
 type TranscriptLine struct {
@@ -72,12 +82,17 @@ type TranscriptLine struct {
 
 type job struct {
 	Summary
+	// The mention or review request a ping job answers.
 	todo gitlab.Todo
 	// Every todo this job answers: its own, plus mentions made in its thread meanwhile.
 	todoIDs []int
-	events  []agent.Event
-	cancel  context.CancelFunc
-	// Thread of the starting comment and the notes already in it.
+	// For an issues job: the profile's label, and when it was put on the issue.
+	label   string
+	labelAt time.Time
+
+	events []agent.Event
+	cancel context.CancelFunc
+	// Thread of the starting comment and the notes already seen.
 	threadID string
 	seen     map[int]bool
 	// Built once the repository is cloned, since .mihari.md comes from it.
@@ -87,10 +102,24 @@ type job struct {
 	awardID int
 }
 
+func (j *job) key() string {
+	if j.Kind == agent.KindIssues {
+		return fmt.Sprintf("%d", j.ProjectID)
+	}
+	return fmt.Sprintf("%d%s", j.ProjectID, j.target().Ref())
+}
+
+// Engine is what jobs need from the scheduler.
+type Engine interface {
+	Active() scheduler.Active
+	// Re-checks the schedule, as when the last job of a drained profile ends.
+	Nudge()
+}
+
 // Service is exposed to the frontend through Wails bindings.
 type Service struct {
 	// Set before startup.
-	Scheduler *scheduler.Service
+	Scheduler Engine
 	// Drops a simulated todo once its job ends.
 	RemoveSimulated func(id int)
 
@@ -101,14 +130,37 @@ type Service struct {
 	known map[int]bool
 	wake  chan struct{}
 	ctx   context.Context
+	// Runs a started job; tests replace it.
+	start func(ctx context.Context, j *job, active scheduler.Active)
 }
 
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	s.known = map[int]bool{}
 	s.wake = make(chan struct{}, 1)
 	s.ctx = ctx
+	s.restore()
 	go s.loop(ctx)
+	go s.watchIssues(ctx)
 	return nil
+}
+
+// restore reloads the history; jobs cut short by the last shutdown are marked
+// so. Their todos and mihari::doing labels bring them back on their own.
+func (s *Service) restore() {
+	for _, r := range loadAll() {
+		if !r.Summary.finished() {
+			r.Summary.State, r.Summary.Error = StateCanceled, "interrompu par l'arrêt de Mihari"
+			if r.Summary.EndedAt.IsZero() {
+				r.Summary.EndedAt = time.Now()
+			}
+			save(r)
+		}
+		s.nextID = max(s.nextID, r.Summary.ID)
+		s.jobs = append(s.jobs, &job{Summary: r.Summary})
+	}
+	if len(s.jobs) > historySize {
+		s.jobs = s.jobs[len(s.jobs)-historySize:]
+	}
 }
 
 // Busy reports whether a job is running, which holds the engine in place.
@@ -128,12 +180,12 @@ func (s *Service) List() []Summary {
 func (s *Service) summaries() []Summary {
 	out := []Summary{}
 	for _, j := range s.jobs {
-		if j.State == StateQueued || j.State == StateRunning {
+		if !j.finished() {
 			out = append(out, j.Summary)
 		}
 	}
 	for i := len(s.jobs) - 1; i >= 0; i-- {
-		if j := s.jobs[i]; j.State != StateQueued && j.State != StateRunning {
+		if j := s.jobs[i]; j.finished() {
 			out = append(out, j.Summary)
 		}
 	}
@@ -143,11 +195,16 @@ func (s *Service) summaries() []Summary {
 // Transcript returns what a job has done so far.
 func (s *Service) Transcript(id int) []agent.Event {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	for _, j := range s.jobs {
-		if j.ID == id {
+		if j.ID == id && (j.events != nil || !j.finished()) {
+			defer s.mu.Unlock()
 			return append([]agent.Event{}, j.events...)
 		}
+	}
+	s.mu.Unlock()
+	// A job from an earlier run: its transcript is on disk only.
+	if r, ok := loadRecord(id); ok {
+		return r.Events
 	}
 	return []agent.Event{}
 }
@@ -155,6 +212,7 @@ func (s *Service) Transcript(id int) []agent.Event {
 // Cancel stops a running job, or drops a queued one.
 func (s *Service) Cancel(id int) {
 	s.mu.Lock()
+	var closeIDs []int
 	for _, j := range s.jobs {
 		if j.ID != id {
 			continue
@@ -164,11 +222,18 @@ func (s *Service) Cancel(id int) {
 			j.cancel()
 		case StateQueued:
 			j.State, j.EndedAt, j.Error = StateCanceled, time.Now(), "annulé avant de démarrer"
-			// Closed on GitLab too, or the next poll would bring it back.
-			go s.closeTodos(append([]int{}, j.todoIDs...))
+			// A ping is closed on GitLab, or the next poll would bring it back.
+			// A labelled issue keeps its label and comes back next scan.
+			if j.Kind == agent.KindPing {
+				closeIDs = append(closeIDs, j.todoIDs...)
+			}
+			go save(record{Summary: j.Summary})
 		}
 	}
 	s.mu.Unlock()
+	if len(closeIDs) > 0 {
+		go s.closeTodos(closeIDs)
+	}
 	s.publish()
 }
 
@@ -193,16 +258,15 @@ func (s *Service) Offer(todos []gitlab.Todo) {
 			s.mu.Unlock()
 			continue
 		}
-		s.mu.Lock()
-		s.nextID++
-		s.jobs = append(s.jobs, &job{
+		s.enqueue(&job{
 			Summary: Summary{
-				ID: s.nextID, State: StateQueued, Project: t.Project, MRIID: t.MRIID, Title: t.Title,
-				URL: t.URL, Author: t.Author, Request: t.Body, Simulated: t.Simulated, QueuedAt: time.Now(),
+				Kind: agent.KindPing, TargetType: t.TargetType, Project: t.Project, ProjectID: t.ProjectID,
+				IID: t.IID, Title: t.Title, URL: t.URL, Author: t.Author, Request: t.Body, Simulated: t.Simulated,
 			},
 			todo:    t,
 			todoIDs: []int{t.ID},
 		})
+		s.mu.Lock()
 		s.known[t.ID] = true
 		s.mu.Unlock()
 	}
@@ -210,6 +274,14 @@ func (s *Service) Offer(todos []gitlab.Todo) {
 		s.publish()
 	}
 	s.poke()
+}
+
+func (s *Service) enqueue(j *job) {
+	s.mu.Lock()
+	s.nextID++
+	j.ID, j.State, j.QueuedAt = s.nextID, StateQueued, time.Now()
+	s.jobs = append(s.jobs, j)
+	s.mu.Unlock()
 }
 
 // runningThreadFor returns the running job whose thread holds the todo's comment.
@@ -220,7 +292,8 @@ func (s *Service) runningThreadFor(t gitlab.Todo) *job {
 	s.mu.Lock()
 	var candidate *job
 	for _, j := range s.jobs {
-		if j.State == StateRunning && j.todo.ProjectID == t.ProjectID && j.MRIID == t.MRIID && j.threadID != "" {
+		if j.State == StateRunning && j.Kind == agent.KindPing && j.ProjectID == t.ProjectID &&
+			j.target() == t.Target() && j.threadID != "" {
 			candidate = j
 		}
 	}
@@ -238,7 +311,7 @@ func (s *Service) runningThreadFor(t gitlab.Todo) *job {
 	if err != nil {
 		return nil
 	}
-	d, err := client.Discussion(s.ctx, t.MRIID, threadID)
+	d, err := client.Discussion(s.ctx, t.Target(), threadID)
 	if err != nil {
 		return nil
 	}
@@ -277,49 +350,78 @@ func (s *Service) loop(ctx context.Context) {
 	}
 }
 
-// dispatch starts queued jobs while the engine and the profile allow it.
+// dispatch starts the queued jobs of the active profile's kind while the
+// engine and MaxJobs allow it.
 func (s *Service) dispatch() {
 	active := s.Scheduler.Active()
-	if !active.Ready || active.Draining || active.Profile.Trigger != profiles.TriggerPing {
+	kind := agent.KindPing
+	if active.Profile.Trigger == profiles.TriggerIssues {
+		kind = agent.KindIssues
+	}
+
+	s.mu.Lock()
+	// Outside an issues period, queued issues are dropped: their label stays
+	// on GitLab and the next period's scan finds them again, as they are then.
+	if kind != agent.KindIssues || !active.Ready {
+		s.jobs = slices.DeleteFunc(s.jobs, func(j *job) bool {
+			return j.Kind == agent.KindIssues && j.State == StateQueued
+		})
+	}
+	if !active.Ready || active.Draining {
+		s.mu.Unlock()
 		return
 	}
-	s.mu.Lock()
+
 	running := 0
-	busyMRs := map[string]bool{}
+	busy := map[string]bool{}
+	var queued []*job
 	for _, j := range s.jobs {
-		if j.State == StateRunning {
+		switch {
+		case j.State == StateRunning:
 			running++
-			busyMRs[mrKey(j.todo)] = true
+			busy[j.key()] = true
+		case j.State == StateQueued && j.Kind == kind:
+			queued = append(queued, j)
 		}
 	}
+	// Issues go by when their label was put; pings by arrival, as queued.
+	slices.SortStableFunc(queued, func(a, b *job) int { return a.labelAt.Compare(b.labelAt) })
+
 	var start []*job
-	for _, j := range s.jobs {
+	for _, j := range queued {
 		if running >= active.Profile.MaxJobs {
 			break
 		}
-		if j.State != StateQueued || busyMRs[mrKey(j.todo)] {
+		if busy[j.key()] {
 			continue
 		}
 		ctx, cancel := context.WithCancel(s.ctx)
 		j.State, j.StartedAt, j.Profile, j.cancel = StateRunning, time.Now(), active.Profile.Name, cancel
 		j.seen = map[int]bool{}
-		busyMRs[mrKey(j.todo)] = true
+		j.events = []agent.Event{}
+		busy[j.key()] = true
 		running++
 		start = append(start, j)
-		go s.run(ctx, j, active)
+		run := s.start
+		if run == nil {
+			run = s.run
+		}
+		go run(ctx, j, active)
 	}
 	s.mu.Unlock()
+	for _, j := range start {
+		s.persist(j)
+	}
 	if len(start) > 0 {
 		s.publish()
 	}
 }
 
-func mrKey(t gitlab.Todo) string {
-	return fmt.Sprintf("%d!%d", t.ProjectID, t.MRIID)
+func (s *Service) emit(j *job, kind, title, text string) {
+	s.record(j, agent.Event{At: time.Now(), Kind: kind, Title: title, Text: text})
 }
 
-func (s *Service) emit(j *job, kind, title, text string) {
-	e := agent.Event{At: time.Now(), Kind: kind, Title: title, Text: text}
+func (s *Service) record(j *job, e agent.Event) {
 	s.mu.Lock()
 	j.events = append(j.events, e)
 	s.mu.Unlock()
@@ -328,14 +430,22 @@ func (s *Service) emit(j *job, kind, title, text string) {
 	}
 }
 
+func (s *Service) persist(j *job) {
+	s.mu.Lock()
+	r := record{Summary: j.Summary, Events: append([]agent.Event{}, j.events...)}
+	s.mu.Unlock()
+	save(r)
+}
+
 func (s *Service) publish() {
 	s.mu.Lock()
-	// Keep every unfinished job and the latest finished ones.
+	// Keep every unfinished job and the latest finished ones. A new slice:
+	// filtering in place from the end would overwrite jobs not read yet.
 	finished := 0
-	kept := s.jobs[:0]
+	var kept []*job
 	for i := len(s.jobs) - 1; i >= 0; i-- {
 		j := s.jobs[i]
-		if j.State != StateQueued && j.State != StateRunning {
+		if j.finished() {
 			finished++
 			if finished > historySize {
 				continue
@@ -352,233 +462,6 @@ func (s *Service) publish() {
 	}
 }
 
-// run carries a job from clone to the last GitLab update, whatever happens.
-func (s *Service) run(ctx context.Context, j *job, active scheduler.Active) {
-	env, cleanup, err := s.prepare(ctx, j, active)
-	defer cleanup()
-
-	var outcome agent.Outcome
-	if err == nil {
-		inbox := make(chan agent.Event, 16)
-		watchCtx, stopWatch := context.WithCancel(ctx)
-		go s.watchThread(watchCtx, j, env, inbox)
-
-		p := active.Profile
-		outcome, err = agent.Run(ctx, agent.Config{
-			URL: active.URL, Model: active.Model, MaxTurns: p.MaxTurns,
-			Timeout: time.Duration(p.MaxMinutes) * time.Minute, ContextTokens: p.ContextPerJob,
-		}, env, j.systemPrompt, j.taskPrompt, inbox, func(e agent.Event) {
-			s.mu.Lock()
-			j.events = append(j.events, e)
-			s.mu.Unlock()
-			if app := application.Get(); app != nil {
-				app.Event.Emit(TranscriptEvent, TranscriptLine{JobID: j.ID, Event: e})
-			}
-		})
-		stopWatch()
-		j.Turns = outcome.Turns
-	}
-	// The job's own time limit is internal to the loop; ctx ends only on Cancel or shutdown.
-	s.finish(j, env, outcome, err, ctx.Err() != nil)
-}
-
-func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) (*agent.Env, func(), error) {
-	var cleanups []func()
-	cleanup := func() {
-		for i := len(cleanups) - 1; i >= 0; i-- {
-			cleanups[i]()
-		}
-	}
-	t := j.todo
-
-	client, err := gitlab.NewClient(t.ProjectID)
-	if err != nil {
-		return nil, cleanup, err
-	}
-	mr, err := client.MergeRequest(ctx, t.MRIID)
-	if err != nil {
-		return nil, cleanup, err
-	}
-	env := &agent.Env{Kind: agent.KindPing, GitLab: client, MR: mr, Requester: t.Author}
-
-	if id, err := client.React(ctx, mr.IID, "eyes"); err == nil {
-		j.awardID = id
-	} else {
-		s.emit(j, "info", "GitLab", "Impossible d'ajouter 👀 : "+err.Error())
-	}
-
-	if t.NoteID != 0 {
-		s.emit(j, "info", "GitLab", "Recherche du fil de la mention…")
-		if discussions, err := client.Discussions(ctx, mr.IID); err == nil {
-			if d, ok := gitlab.DiscussionOf(discussions, t.NoteID); ok {
-				s.mu.Lock()
-				j.threadID = d.ID
-				for _, n := range d.Notes {
-					j.seen[n.ID] = true
-				}
-				s.mu.Unlock()
-				env.ThreadID = d.ID
-			}
-		}
-	}
-
-	config, err := projects.Load()
-	if err != nil {
-		return env, cleanup, err
-	}
-	dir, err := sandbox.NewWorkspace()
-	if err != nil {
-		return env, cleanup, err
-	}
-	cleanups = append(cleanups, func() { os.RemoveAll(dir) })
-	repo := filepath.Join(dir, "repo")
-
-	path, err := client.ProjectPath(ctx)
-	if err != nil {
-		return env, cleanup, err
-	}
-	s.emit(j, "info", "Préparation", "Clone de "+path+" ("+mr.SourceBranch+")…")
-	if mr.FromFork() {
-		err = gitlab.Clone(ctx, path, mr.TargetBranch, repo)
-		if err == nil {
-			err = gitlab.CheckoutMergeRequest(ctx, repo, mr.IID)
-		}
-	} else {
-		err = gitlab.Clone(ctx, path, mr.SourceBranch, repo)
-	}
-	if err != nil {
-		return env, cleanup, err
-	}
-
-	image := config.Image(t.ProjectID)
-	s.emit(j, "info", "Préparation", "Démarrage du container "+image+"…")
-	container, err := sandbox.Start(ctx, sandbox.Spec{Image: image, Workspace: repo})
-	if err != nil {
-		return env, cleanup, err
-	}
-	cleanups = append(cleanups, func() { _ = container.Close() })
-	env.Runner = container
-
-	env.Push = func(ctx context.Context, message string) (string, error) {
-		container.Chown(ctx)
-		bot, err := client.Identity(ctx, client.Bot)
-		if err != nil {
-			return "", err
-		}
-		if requester, err := client.Identity(ctx, t.Author); err == nil && t.Author != client.Bot {
-			message = strings.TrimSpace(message) + fmt.Sprintf("\n\nCo-authored-by: %s <%s>", requester.Name, requester.Email)
-		}
-		return gitlab.Push(ctx, repo, mr.SourceBranch, message, bot)
-	}
-
-	j.systemPrompt = systemPrompt(active.Profile.Prompt, config.Project(t.ProjectID).Instructions, readMihariMD(repo))
-	j.taskPrompt = taskPrompt(t, mr)
-	return env, cleanup, nil
-}
-
-// watchThread passes new replies in the job's thread to the agent, from
-// people allowed to call the bot, mention or not.
-func (s *Service) watchThread(ctx context.Context, j *job, env *agent.Env, inbox chan<- agent.Event) {
-	if env.ThreadID == "" {
-		return
-	}
-	ticker := time.NewTicker(threadPoll)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-		d, err := env.GitLab.Discussion(ctx, env.MR.IID, env.ThreadID)
-		if err != nil {
-			continue
-		}
-		config, err := projects.Load()
-		if err != nil {
-			continue
-		}
-		var members []gitlab.Member
-		for _, n := range d.Notes {
-			s.mu.Lock()
-			seen := j.seen[n.ID]
-			j.seen[n.ID] = true
-			s.mu.Unlock()
-			if seen || n.Author == env.GitLab.Bot {
-				continue
-			}
-			if members == nil {
-				if members, err = gitlab.ProjectMembers(ctx, j.todo.ProjectID); err != nil {
-					break
-				}
-			}
-			if !config.Project(j.todo.ProjectID).Authorizes(n.Author, members) {
-				continue
-			}
-			select {
-			case inbox <- agent.Event{At: time.Now(), Kind: "message", Title: "Nouveau message de @" + n.Author + " dans le fil", Text: n.Body}:
-			default:
-			}
-		}
-	}
-}
-
-// finish reports the outcome on GitLab and closes the todos.
-func (s *Service) finish(j *job, env *agent.Env, outcome agent.Outcome, runErr error, canceled bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	state, reason := StateSucceeded, ""
-	switch {
-	case canceled:
-		state, reason = StateCanceled, "Job annulé depuis Mihari."
-	case runErr != nil:
-		state, reason = StateFailed, runErr.Error()
-	case !outcome.Success:
-		state, reason = StateFailed, outcome.Summary
-	}
-
-	if env != nil && env.GitLab != nil && env.MR.IID != 0 {
-		// The model's summary is the answer when it forgot to post one.
-		if state == StateSucceeded && !env.Replied && outcome.Summary != "" {
-			s.post(ctx, env, outcome.Summary)
-		}
-		if state != StateSucceeded {
-			msg := "❌ Je n'ai pas pu terminer : " + reason
-			if canceled {
-				msg = "❌ " + reason
-			}
-			s.post(ctx, env, msg)
-		}
-		if j.awardID != 0 {
-			_ = env.GitLab.Unreact(ctx, env.MR.IID, j.awardID)
-		}
-		emoji := "white_check_mark"
-		if state != StateSucceeded {
-			emoji = "x"
-		}
-		_, _ = env.GitLab.React(ctx, env.MR.IID, emoji)
-	}
-
-	s.mu.Lock()
-	ids := append([]int{}, j.todoIDs...)
-	s.mu.Unlock()
-	s.closeTodos(ids)
-
-	s.mu.Lock()
-	j.State, j.EndedAt, j.Error, j.Result = state, time.Now(), reason, outcome.Summary
-	s.mu.Unlock()
-	kind := "info"
-	if state != StateSucceeded {
-		kind = "error"
-	}
-	s.emit(j, kind, "Fin", strings.TrimSpace(fmt.Sprintf("%s %s", stateLabel(state), reason)))
-	s.publish()
-	// A drained profile can switch now; the next queued job can start.
-	s.Scheduler.Nudge()
-	s.poke()
-}
-
 // closeTodos marks GitLab todos done and drops simulated ones.
 func (s *Service) closeTodos(ids []int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -593,28 +476,5 @@ func (s *Service) closeTodos(ids []int) {
 		if err := gitlab.MarkTodoDone(ctx, id); err != nil {
 			log.Printf("mark todo %d done: %v", id, err)
 		}
-	}
-}
-
-func (s *Service) post(ctx context.Context, env *agent.Env, body string) {
-	var err error
-	if env.ThreadID != "" {
-		_, err = env.GitLab.Reply(ctx, env.MR.IID, env.ThreadID, body)
-	} else {
-		_, err = env.GitLab.Comment(ctx, env.MR.IID, body)
-	}
-	if err != nil {
-		log.Printf("post on !%d: %v", env.MR.IID, err)
-	}
-}
-
-func stateLabel(s State) string {
-	switch s {
-	case StateSucceeded:
-		return "Terminé."
-	case StateCanceled:
-		return "Annulé."
-	default:
-		return "Échec :"
 	}
 }

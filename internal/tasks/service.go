@@ -204,15 +204,15 @@ func (s *Service) publish() {
 	}
 }
 
-// Simulate queues the todo author mentioning the bot with body on the merge
-// request at mrURL would create, for testing without pinging on GitLab.
+// Simulate queues the todo author mentioning the bot with body on the merge request or issue
+// at mrURL would create, for testing without pinging on GitLab.
 func (s *Service) Simulate(mrURL, author, body string) (gitlab.Todo, error) {
 	if !devmode.Enabled {
 		return gitlab.Todo{}, devmode.ErrDisabled
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	todo, err := gitlab.MergeRequestTodo(ctx, mrURL, author, body)
+	todo, err := gitlab.SimulatedTodo(ctx, mrURL, author, body)
 	if err != nil {
 		return gitlab.Todo{}, err
 	}

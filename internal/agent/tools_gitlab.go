@@ -5,12 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/Impre-visible/mihari/internal/gitlab"
 )
 
-func onMR(env *Env) bool { return env.MR.IID != 0 }
-
-// Pushing goes to the merge request's own branch, which a fork keeps out of reach.
-func canPush(env *Env) bool { return onMR(env) && env.Push != nil && !env.MR.FromFork() }
+func hasMR(env *Env) bool     { return env.MR.IID != 0 }
+func hasTarget(env *Env) bool { return env.Target.IID != 0 }
+func hasIssue(env *Env) bool  { return env.Issue != nil }
+func reviewing(env *Env) bool { return env.Target.Type == gitlab.MergeRequestTarget && hasMR(env) }
+func canPush(env *Env) bool   { return env.Push != nil }
+func canOpenMR(env *Env) bool { return env.OpenMR != nil && env.OpenedMR == nil }
 
 type getDiffArgs struct {
 	Path string `json:"path,omitempty" desc:"Un seul fichier ; tous les fichiers si vide"`
@@ -30,6 +34,11 @@ type pushArgs struct {
 	Message string `json:"message" desc:"Message de commit, première ligne courte"`
 }
 
+type openMRArgs struct {
+	Title       string `json:"title" desc:"Titre de la MR, court"`
+	Description string `json:"description" desc:"Ce que tu as changé et pourquoi, en Markdown"`
+}
+
 func init() {
 	Register(
 		Define("get_merge_request", "Titre, description, auteur et branches de la MR.",
@@ -38,7 +47,14 @@ func init() {
 				return fmt.Sprintf("!%d %s\nAuteur : @%s\nBranche : %s → %s\nÉtat : %s\n\n%s",
 					mr.IID, mr.Title, mr.Author, mr.SourceBranch, mr.TargetBranch, mr.State,
 					strings.TrimSpace(mr.Description)), nil
-			}, When(onMR)),
+			}, When(hasMR)),
+
+		Define("get_issue", "Titre, description, auteur et labels de l'issue.",
+			func(ctx context.Context, env *Env, _ NoArgs) (string, error) {
+				i := env.Issue
+				return fmt.Sprintf("#%d %s\nAuteur : @%s\nLabels : %s\nÉtat : %s\n\n%s",
+					i.IID, i.Title, i.Author, strings.Join(i.Labels, ", "), i.State, strings.TrimSpace(i.Description)), nil
+			}, When(hasIssue)),
 
 		Define("get_diff", "Diff de la MR, fichier par fichier.",
 			func(ctx context.Context, env *Env, a getDiffArgs) (string, error) {
@@ -66,23 +82,23 @@ func init() {
 					return "Aucun fichier ne correspond.", nil
 				}
 				return b.String(), nil
-			}, When(onMR)),
+			}, When(hasMR)),
 
 		Define("read_thread", "Relit le fil de commentaires qui a lancé le job.",
 			func(ctx context.Context, env *Env, _ NoArgs) (string, error) {
 				if env.ThreadID == "" {
-					return "Ce job vient d'une demande de review, sans fil de commentaires.", nil
+					return "Ce job n'a pas de fil de commentaires : il vient d'une demande de review ou d'un label.", nil
 				}
-				d, err := env.GitLab.Discussion(ctx, env.MR.IID, env.ThreadID)
+				d, err := env.GitLab.Discussion(ctx, env.Target, env.ThreadID)
 				if err != nil {
 					return "", err
 				}
 				return formatNotes(d.Notes), nil
-			}, When(onMR)),
+			}, When(hasTarget)),
 
-		Define("read_comments", "Relit tous les commentaires de la MR, y compris les anciens échanges avec toi.",
+		Define("read_comments", "Relit tous les commentaires, y compris les anciens échanges avec toi.",
 			func(ctx context.Context, env *Env, _ NoArgs) (string, error) {
-				discussions, err := env.GitLab.Discussions(ctx, env.MR.IID)
+				discussions, err := env.GitLab.Discussions(ctx, env.Target)
 				if err != nil {
 					return "", err
 				}
@@ -94,7 +110,7 @@ func init() {
 					return "Aucun commentaire.", nil
 				}
 				return b.String(), nil
-			}, When(onMR)),
+			}, When(hasTarget)),
 
 		Define("comment_line", "Commente une ligne précise du diff, comme dans une review. Une remarque par appel.",
 			func(ctx context.Context, env *Env, a commentLineArgs) (string, error) {
@@ -116,13 +132,13 @@ func init() {
 				if err != nil {
 					// Outside the diff: still worth saying, as a regular comment.
 					body := fmt.Sprintf("**%s:%d**\n\n%s", a.Path, a.Line, a.Body)
-					if _, err := env.GitLab.Comment(ctx, env.MR.IID, body); err != nil {
+					if _, err := env.GitLab.Comment(ctx, env.Target, body); err != nil {
 						return "", err
 					}
 					return fmt.Sprintf("La ligne %d de %s n'est pas dans le diff : posté en commentaire normal.", a.Line, a.Path), nil
 				}
-				return "Commentaire posté sur " + fmt.Sprintf("%s:%d.", a.Path, a.Line), nil
-			}, When(onMR)),
+				return fmt.Sprintf("Commentaire posté sur %s:%d.", a.Path, a.Line), nil
+			}, When(reviewing)),
 
 		Define("reply", "Répond à la personne qui t'a sollicité : ton résumé, ta réponse ou ta question. Appelle-le avant finish.",
 			func(ctx context.Context, env *Env, a replyArgs) (string, error) {
@@ -131,18 +147,18 @@ func init() {
 				}
 				var err error
 				if env.ThreadID != "" {
-					_, err = env.GitLab.Reply(ctx, env.MR.IID, env.ThreadID, a.Body)
+					_, err = env.GitLab.Reply(ctx, env.Target, env.ThreadID, a.Body)
 				} else {
-					_, err = env.GitLab.Comment(ctx, env.MR.IID, a.Body)
+					_, err = env.GitLab.Comment(ctx, env.Target, a.Body)
 				}
 				if err != nil {
 					return "", err
 				}
 				env.Replied = true
 				return "Réponse postée.", nil
-			}, When(onMR)),
+			}, When(hasTarget)),
 
-		Define("push", "Commit toutes tes modifications du repo et les pousse sur la branche de la MR. Jamais de force-push : si la branche a bougé, ça échoue.",
+		Define("push", "Commit toutes tes modifications du repo et les pousse sur la branche du job. Jamais de force-push : si la branche a bougé, ça échoue.",
 			func(ctx context.Context, env *Env, a pushArgs) (string, error) {
 				if strings.TrimSpace(a.Message) == "" {
 					return "", errors.New("message de commit vide")
@@ -152,8 +168,21 @@ func init() {
 					return "", err
 				}
 				env.Pushes = append(env.Pushes, sha)
-				return fmt.Sprintf("Commit %s poussé sur %s.", sha, env.MR.SourceBranch), nil
+				return "Commit " + sha + " poussé.", nil
 			}, When(canPush)),
+
+		Define("open_merge_request", "Commit tes modifications, pousse la branche et ouvre une MR en brouillon vers la branche par défaut. Une seule fois par job ; ensuite, push met la MR à jour.",
+			func(ctx context.Context, env *Env, a openMRArgs) (string, error) {
+				if strings.TrimSpace(a.Title) == "" {
+					return "", errors.New("titre vide")
+				}
+				mr, err := env.OpenMR(ctx, a.Title, a.Description)
+				if err != nil {
+					return "", err
+				}
+				env.OpenedMR, env.MR = &mr, mr
+				return fmt.Sprintf("MR !%d ouverte en brouillon : %s", mr.IID, mr.WebURL), nil
+			}, When(canOpenMR)),
 	)
 }
 

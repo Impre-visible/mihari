@@ -4,6 +4,9 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as agent$0 from "../agent/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as gitlab$0 from "../gitlab/models.js";
 
 export enum State {
     /**
@@ -20,11 +23,18 @@ export enum State {
 
 export interface Summary {
     "id": number;
+    "kind": agent$0.Kind;
     "state": State;
+    "targetType": gitlab$0.TargetType;
     "project": string;
-    "mrIid": number;
+    "projectId": number;
+    "iid": number;
     "title": string;
     "url": string;
+
+    /**
+     * Who asked: the author of the mention, or who put the label.
+     */
     "author": string;
     "request": string;
     "simulated": boolean;
@@ -35,6 +45,11 @@ export interface Summary {
     "turns": number;
     "error": string;
     "result": string;
+
+    /**
+     * The merge request the agent opened, if any.
+     */
+    "openedMr": string;
 }
 
 export interface TranscriptLine {

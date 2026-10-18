@@ -67,6 +67,12 @@ func CheckoutMergeRequest(ctx context.Context, dir string, iid int) error {
 	return err
 }
 
+// NewBranch starts a local branch at the current commit; Push publishes it.
+func NewBranch(ctx context.Context, dir, name string) error {
+	_, err := git(ctx, dir, nil, "checkout", "--quiet", "-b", name)
+	return err
+}
+
 // Push commits every change in dir as author and pushes it to branch. It never
 // forces: a branch that moved meanwhile makes it fail.
 func Push(ctx context.Context, dir, branch, message string, author Identity) (string, error) {

@@ -34,8 +34,8 @@ export function RemoveSimulated(id: number): $CancellablePromise<void> {
 }
 
 /**
- * Simulate queues the todo author mentioning the bot with body on the merge
- * request at mrURL would create, for testing without pinging on GitLab.
+ * Simulate queues the todo author mentioning the bot with body on the merge request or issue
+ * at mrURL would create, for testing without pinging on GitLab.
  */
 export function Simulate(mrURL: string, author: string, body: string): $CancellablePromise<gitlab$0.Todo> {
     return $Call.ByID(1877247671, mrURL, author, body);
