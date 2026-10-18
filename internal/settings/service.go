@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/zalando/go-keyring"
 )
 
 // Service is exposed to the frontend through Wails bindings.
@@ -104,4 +106,19 @@ func (s *Service) Set(field string, value interface{}) error {
 	}
 
 	return nil
+}
+
+func (s *Service) HasGitLabToken() (bool, error) {
+	value, err := keyring.Get("mihari", "gitlab_token")
+	if err != nil {
+		if errors.Is(err, keyring.ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return value != "", nil
+}
+
+func (s *Service) SetGitLabToken(token string) error {
+	return keyring.Set("mihari", "gitlab_token", token)
 }

@@ -25,6 +25,10 @@ export function GetConfig(): $CancellablePromise<{ [_ in string]?: any } | null>
     return $Call.ByID(310848622);
 }
 
+export function HasGitLabToken(): $CancellablePromise<string> {
+    return $Call.ByID(745216800);
+}
+
 /**
  * IsOnboarded reports whether the user has already gone past the welcome screen.
  */
@@ -34,4 +38,8 @@ export function IsOnboarded(): $CancellablePromise<boolean> {
 
 export function Set(field: string, value: any): $CancellablePromise<void> {
     return $Call.ByID(1278439948, field, value);
+}
+
+export function SetGitLabToken(token: string): $CancellablePromise<void> {
+    return $Call.ByID(1929798536, token);
 }
