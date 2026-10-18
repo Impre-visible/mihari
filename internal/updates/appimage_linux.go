@@ -3,11 +3,8 @@ package updates
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"syscall"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/updater"
@@ -41,10 +38,7 @@ func (s *Service) replaceAppImage(ctx context.Context, rel *updater.Release) err
 	if err := os.Rename(tmp.Name(), current); err != nil {
 		return err
 	}
-	cmd := exec.Command(current)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
-	if err := cmd.Start(); err != nil {
+	if err := relaunchAfterExit(current); err != nil {
 		return err
 	}
 	application.Get().Quit()

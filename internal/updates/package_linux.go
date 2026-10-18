@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -86,17 +87,40 @@ func (s *Service) installPackage(ctx context.Context, rel *updater.Release, m Me
 		return fmt.Errorf("%s : %s", args[0], strings.TrimSpace(string(out)))
 	}
 
-	// The package replaced the binary at the same path; start it and leave.
+	// The package replaced the binary at the same path; start it once this one is gone.
 	exe, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(strings.TrimSuffix(exe, " (deleted)"))
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
-	if err := cmd.Start(); err != nil {
+	if err := relaunchAfterExit(strings.TrimSuffix(exe, " (deleted)")); err != nil {
 		return err
 	}
 	application.Get().Quit()
 	return nil
+}
+
+// relaunchAfterExit starts path once this process has exited, so that the
+// two versions never run side by side.
+func relaunchAfterExit(path string) error {
+	return relaunchWhenGone(os.Getpid(), path)
+}
+
+func relaunchWhenGone(pid int, path string) error {
+	script := `while kill -0 "$1" 2>/dev/null; do sleep 0.2; done; exec "$2"`
+	args := []string{"sh", "-c", script, "sh", strconv.Itoa(pid), path}
+	// Desktop launchers run Mihari in a systemd unit, which kills every
+	// process of its cgroup once Mihari exits, a new session or not. A unit
+	// of its own survives that.
+	if _, err := exec.LookPath("systemd-run"); err == nil && os.Getenv("XDG_RUNTIME_DIR") != "" {
+		args = append([]string{"systemd-run", "--user", "--quiet", "--collect", "--unit", "mihari-relaunch-" + strconv.Itoa(pid), "--"}, args...)
+	}
+	cmd := exec.Command(args[0], args[1:]...)
+	// Its own session too, for systems without systemd.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, io.Discard, io.Discard
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("relance de Mihari : %w", err)
+	}
+	// Not waited for: it must outlive us.
+	return cmd.Process.Release()
 }
