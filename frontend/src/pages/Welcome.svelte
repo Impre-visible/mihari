@@ -1,10 +1,13 @@
 <script lang="ts">
-  import { EyeIcon, GitMergeIcon, ShieldCheckIcon, TestTubeIcon } from "phosphor-svelte";
+  import { GitMergeIcon, ShieldCheckIcon, TestTubeIcon } from "phosphor-svelte";
+  import { Service as Updates } from "../../bindings/github.com/Impre-visible/mihari/internal/updates";
   import { AppWindow, Button } from "$lib/ui";
+  import logo from "$lib/logo-icon.svg";
 
-  let { onstart }: { onstart: () => void } = $props();
+  let { onstart, onskip }: { onstart: () => void; onskip: () => void } = $props();
 
-  const mihariVersion = "v1.0.0";
+  let mihariVersion = $state("");
+  Updates.Status().then((i) => (mihariVersion = "v" + i.current));
 
   // The macOS "Welcome to…" sheet: a few features, each a glyph, a title and a sentence.
   const features = [
@@ -28,12 +31,7 @@
 
 <AppWindow>
   <div class="mx-auto flex h-full max-w-lg flex-col items-center justify-center py-6 text-center">
-    <div
-      class="flex size-16 items-center justify-center rounded-[14px] bg-accent text-white shadow-md"
-      aria-hidden="true"
-    >
-      <EyeIcon size={36} weight="fill" />
-    </div>
+    <img src={logo} alt="" class="size-20 shadow-md rounded-[18px]" />
 
     <h1 class="p-large-title-2 p-emphasized mt-5">Bienvenue dans Mihari</h1>
 
@@ -49,7 +47,8 @@
       {/each}
     </ul>
 
-    <Button variant="primary" size="large" class="mt-10 min-w-48" onclick={onstart}>Continuer</Button>
+    <Button variant="primary" size="large" class="mt-10 min-w-48" onclick={onstart}>Configurer</Button>
+    <Button variant="borderless" class="mt-2" onclick={onskip}>Plus tard</Button>
 
     <p class="p-caption-1 mt-4 text-tertiary-label tabular-nums">{mihariVersion}</p>
   </div>

@@ -13,6 +13,7 @@
   import type { Event as JobEvent } from "../../../bindings/github.com/Impre-visible/mihari/internal/agent/models";
   import { Button, FormGroup, Spinner } from "$lib/ui";
   import { ref } from "$lib/refs";
+  import { nav } from "$lib/nav.svelte";
 
   type Props = { now: number };
   let { now }: Props = $props();
@@ -49,6 +50,14 @@
       offJobs();
       offLines();
     };
+  });
+
+  // Asked from elsewhere, like a notification.
+  $effect(() => {
+    if (nav.jobId !== null) {
+      open(nav.jobId);
+      nav.jobId = null;
+    }
   });
 
   function open(id: number) {

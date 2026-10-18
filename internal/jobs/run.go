@@ -361,6 +361,12 @@ func (s *Service) finish(j *job, env *agent.Env, outcome agent.Outcome, runErr e
 	s.emit(j, kind, "Fin", strings.TrimSpace(stateLabel(state)+" "+reason))
 	s.persist(j)
 	s.publish()
+	if s.OnFinished != nil {
+		s.mu.Lock()
+		summary := j.Summary
+		s.mu.Unlock()
+		s.OnFinished(summary)
+	}
 	// A drained profile can switch now; the next queued job can start.
 	s.Scheduler.Nudge()
 	s.poke()

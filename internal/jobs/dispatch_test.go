@@ -109,3 +109,23 @@ func TestDispatchIssues(t *testing.T) {
 		}
 	}
 }
+
+func TestPeriodSummary(t *testing.T) {
+	s, engine, _ := newTestService(t, profiles.TriggerIssues, 2)
+	var got []PeriodSummary
+	s.OnPeriodEnd = func(p PeriodSummary) { got = append(got, p) }
+
+	s.dispatch() // the issues period begins
+	for i, state := range []State{StateSucceeded, StateSucceeded, StateFailed} {
+		s.enqueue(&job{Summary: Summary{Kind: agent.KindIssues, TargetType: gitlab.IssueTarget, ProjectID: 10 + i, IID: 1}})
+		s.jobs[len(s.jobs)-1].State = state
+		s.jobs[len(s.jobs)-1].StartedAt = time.Now()
+	}
+
+	engine.active.Profile.Trigger = profiles.TriggerPing
+	s.dispatch()
+	s.dispatch() // once only
+	if len(got) != 1 || got[0].Succeeded != 2 || got[0].Failed != 1 {
+		t.Fatalf("summaries %+v", got)
+	}
+}

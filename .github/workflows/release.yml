@@ -58,7 +58,8 @@ jobs:
           # The templates carry 0.1.0 as a literal; perl -pi behaves the same on every runner.
           perl -pi -e "s/0\.1\.0/$VERSION/g" \
             build/linux/nfpm/nfpm.yaml build/darwin/Info.plist \
-            build/windows/info.json build/windows/nsis/wails_tools.nsh
+            build/windows/info.json build/windows/nsis/wails_tools.nsh \
+            internal/version/version.go
 
       - uses: actions/setup-go@v5
         with:
@@ -144,19 +145,25 @@ jobs:
         run: |
           command -v makensis || choco install nsis -y
           export PATH="$PATH:/c/Program Files (x86)/NSIS"
-          task windows:package
+          # Per-user install: the app can then replace its own .exe when updating.
+          task windows:package INSTALL_SCOPE=user
 
       - name: Collect installers
         run: |
           mkdir -p dist
           V="${{ steps.version.outputs.version }}"
           case "${{ matrix.platform }}" in
-            darwin)  cp bin/*.dmg "dist/Mihari-$V-macos-arm64.dmg" ;;
+            darwin)
+              cp bin/*.dmg "dist/Mihari-$V-macos-arm64.dmg"
+              # What the in-app updater installs: the signed bundle, zipped.
+              ditto -c -k --keepParent bin/mihari.app "dist/mihari-$V-darwin-arm64.zip" ;;
             linux)
               cp bin/*.AppImage "dist/Mihari-$V-linux-x86_64.AppImage"
               cp bin/*.deb "dist/mihari_${V}_amd64.deb"
               cp bin/*.pkg.tar.zst "dist/mihari-$V-x86_64.pkg.tar.zst" ;;
-            windows) cp bin/*installer*.exe "dist/Mihari-$V-windows-amd64-setup.exe" ;;
+            windows)
+              cp bin/*installer*.exe "dist/Mihari-$V-windows-amd64-setup.exe"
+              powershell -NoProfile -Command "Compress-Archive -Path bin/mihari.exe -DestinationPath dist/mihari-$V-windows-amd64.zip" ;;
           esac
           ls -la dist
 
@@ -174,6 +181,10 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+
+      - name: Checksums
+        # The in-app updater checks its download against this file.
+        run: cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
 
       - uses: softprops/action-gh-release@v2
         with:

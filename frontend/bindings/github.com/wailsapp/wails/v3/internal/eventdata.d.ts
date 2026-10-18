@@ -17,16 +17,21 @@ import type * as scheduler$0 from "../../../../Impre-visible/mihari/internal/sch
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import type * as tasks$0 from "../../../../Impre-visible/mihari/internal/tasks/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import type * as updates$0 from "../../../../Impre-visible/mihari/internal/updates/models.js";
 
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "desktop:open-job": number;
             "engine:updated": scheduler$0.Snapshot;
             "job:event": jobs$0.TranscriptLine;
             "jobs:updated": jobs$0.Summary[] | null;
             "model:download": engine$0.Download;
             "tasks:updated": tasks$0.Snapshot;
             "time": string;
+            "updates:changed": updates$0.Info;
         }
     }
 }

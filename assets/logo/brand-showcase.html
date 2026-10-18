@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mihari Brand</title>
+<style>
+  :root { --night:#06070F; --surface:#0E1020; --line:#1C2033; --text:#F5F7FF; --muted:#9AA3BF; --blue:#0A84FF; --paper:#FAFAFA; --ink:#06070F; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--night); color:var(--text); font:16px/1.55 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:960px; margin:0 auto; padding:48px 16px 64px; }
+  h1 { font-size:40px; margin:24px 0 4px; letter-spacing:-0.5px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:1.5px; color:var(--muted); margin:48px 0 16px; }
+  p { color:var(--muted); max-width:62ch; }
+  .hero .art { width:min(480px,100%); height:auto; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; }
+  .card { border:1px solid var(--line); border-radius:14px; padding:20px; display:flex; flex-direction:column; gap:12px; align-items:center; }
+  .card.light { background:var(--paper); color:var(--ink); }
+  .card .art { max-width:100%; height:72px; width:auto; }
+  .card code { font-size:12px; color:inherit; opacity:.7; }
+  .sizes { display:flex; gap:20px; align-items:end; flex-wrap:wrap; }
+  .swatch { border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .swatch div:first-child { height:72px; }
+  .swatch div:last-child { padding:10px 12px; font-size:13px; }
+  pre { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px; overflow-x:auto; font-size:13px; color:var(--text); }
+  footer { margin-top:56px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <section class="hero"><svg class="art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" width="320" height="72" role="img" aria-label="Mihari">
+  <g transform="translate(8 8) scale(0.875)">
+    <path fill="#F5F7FF" fill-rule="evenodd" d="M22 6h20a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Zm2 5a1 1 0 0 0-1 1v22a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1ZM24 40h5L17 58h-6ZM35 40h5v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4h5v4a7 7 0 0 1-7 7h-8a7 7 0 0 1-7-7Z"/>
+    <path fill="#0A84FF" d="M23 18h18v3H23Zm0 7h18v3H23Z"/>
+  </g>
+  <text x="80" y="49" font-family="Inter, system-ui, -apple-system, 'Segoe UI', sans-serif" font-weight="600" font-size="36" letter-spacing="-0.5" fill="#F5F7FF">Mihari</text>
+</svg>
+
+    <h1>Mihari</h1>
+    <p>見張り, « sentinelle ». Une app de bureau qui fait tourner des modèles locaux pour relire les merge requests le jour et écrire des tests la nuit.</p>
+  </section>
+
+  <h2>Le symbole</h2>
+  <p>Le kanji 見 (miru, « voir ») est le premier caractère de 見張り. Il est réduit à sa géométrie : l'œil 目, un cadre arrondi dont les deux barres bleues sont le regard, posé sur les jambes 儿, l'une oblique, l'autre qui finit en crochet. Deux couches seulement, pour rester lisible à 16 px et dans la barre de menus.</p>
+
+  <h2>Variantes</h2>
+  <div class="grid">
+    <div class="card"><svg class="art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Mihari">
+  <path fill="#F5F7FF" fill-rule="evenodd" d="M22 6h20a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Zm2 5a1 1 0 0 0-1 1v22a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1ZM24 40h5L17 58h-6ZM35 40h5v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4h5v4a7 7 0 0 1-7 7h-8a7 7 0 0 1-7-7Z"/>
+  <path fill="#0A84FF" d="M23 18h18v3H23Zm0 7h18v3H23Z"/>
+</svg>
+<code>logo-mark.svg</code></div>
+    <div class="card light"><svg class="art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" width="320" height="72" role="img" aria-label="Mihari">
+  <g transform="translate(8 8) scale(0.875)" fill="#06070F">
+    <path fill-rule="evenodd" d="M22 6h20a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Zm2 5a1 1 0 0 0-1 1v22a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1ZM24 40h5L17 58h-6ZM35 40h5v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4h5v4a7 7 0 0 1-7 7h-8a7 7 0 0 1-7-7Z"/>
+    <path d="M23 18h18v3H23Zm0 7h18v3H23Z"/>
+  </g>
+  <text x="80" y="49" font-family="Inter, system-ui, -apple-system, 'Segoe UI', sans-serif" font-weight="600" font-size="36" letter-spacing="-0.5" fill="#06070F">Mihari</text>
+</svg>
+<code>logo-black.svg</code></div>
+    <div class="card"><svg class="art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" width="320" height="72" role="img" aria-label="Mihari">
+  <g transform="translate(8 8) scale(0.875)" fill="#FFFFFF">
+    <path fill-rule="evenodd" d="M22 6h20a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Zm2 5a1 1 0 0 0-1 1v22a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1ZM24 40h5L17 58h-6ZM35 40h5v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4h5v4a7 7 0 0 1-7 7h-8a7 7 0 0 1-7-7Z"/>
+    <path d="M23 18h18v3H23Zm0 7h18v3H23Z"/>
+  </g>
+  <text x="80" y="49" font-family="Inter, system-ui, -apple-system, 'Segoe UI', sans-serif" font-weight="600" font-size="36" letter-spacing="-0.5" fill="#FFFFFF">Mihari</text>
+</svg>
+<code>logo-white.svg</code></div>
+    <div class="card"><svg class="art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 40" width="180" height="40" role="img" aria-label="Mihari">
+  <text x="2" y="31" font-family="Inter, system-ui, -apple-system, 'Segoe UI', sans-serif" font-weight="600" font-size="32" letter-spacing="-0.5" fill="#F5F7FF">Mihari</text>
+</svg>
+<code>logo-wordmark.svg</code></div>
+    <div class="card"><svg class="art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Mihari">
+  <rect width="512" height="512" rx="112" fill="#06070F"/>
+  <rect x="4" y="4" width="504" height="504" rx="108" fill="none" stroke="#1C2033" stroke-width="8"/>
+  <g transform="translate(64 64) scale(6)">
+    <path fill="#F5F7FF" fill-rule="evenodd" d="M22 6h20a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Zm2 5a1 1 0 0 0-1 1v22a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1ZM24 40h5L17 58h-6ZM35 40h5v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4h5v4a7 7 0 0 1-7 7h-8a7 7 0 0 1-7-7Z"/>
+    <path fill="#0A84FF" d="M23 18h18v3H23Zm0 7h18v3H23Z"/>
+  </g>
+</svg>
+<code>logo-icon.svg</code></div>
+    <div class="card light"><svg class="art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="Mihari">
+  <rect width="16" height="16" rx="3.5" fill="#06070F"/>
+  <g transform="translate(0.5 0.5) scale(0.234375)">
+    <path fill="#F5F7FF" fill-rule="evenodd" d="M22 6h20a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Zm2 5a1 1 0 0 0-1 1v22a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1ZM24 40h5L17 58h-6ZM35 40h5v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4h5v4a7 7 0 0 1-7 7h-8a7 7 0 0 1-7-7Z"/>
+    <path fill="#0A84FF" d="M23 18h18v3H23Zm0 7h18v3H23Z"/>
+  </g>
+</svg>
+<code>favicon.svg</code></div>
+  </div>
+
+  <h2>Petites tailles</h2>
+  <div class="sizes">
+    <div style="width:16px"><svg class="art" style="width:16px;height:16px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="Mihari">
+  <rect width="16" height="16" rx="3.5" fill="#06070F"/>
+  <g transform="translate(0.5 0.5) scale(0.234375)">
+    <path fill="#F5F7FF" fill-rule="evenodd" d="M22 6h20a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Zm2 5a1 1 0 0 0-1 1v22a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1ZM24 40h5L17 58h-6ZM35 40h5v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4h5v4a7 7 0 0 1-7 7h-8a7 7 0 0 1-7-7Z"/>
+    <path fill="#0A84FF" d="M23 18h18v3H23Zm0 7h18v3H23Z"/>
+  </g>
+</svg>
+</div><div style="width:24px"><svg class="art" style="width:24px;height:24px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="Mihari">
+  <rect width="16" height="16" rx="3.5" fill="#06070F"/>
+  <g transform="translate(0.5 0.5) scale(0.234375)">
+    <path fill="#F5F7FF" fill-rule="evenodd" d="M22 6h20a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Zm2 5a1 1 0 0 0-1 1v22a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1ZM24 40h5L17 58h-6ZM35 40h5v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4h5v4a7 7 0 0 1-7 7h-8a7 7 0 0 1-7-7Z"/>
+    <path fill="#0A84FF" d="M23 18h18v3H23Zm0 7h18v3H23Z"/>
+  </g>
+</svg>
+</div><div style="width:32px"><svg class="art" style="width:32px;height:32px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="Mihari">
+  <rect width="16" height="16" rx="3.5" fill="#06070F"/>
+  <g transform="translate(0.5 0.5) scale(0.234375)">
+    <path fill="#F5F7FF" fill-rule="evenodd" d="M22 6h20a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Zm2 5a1 1 0 0 0-1 1v22a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1ZM24 40h5L17 58h-6ZM35 40h5v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4h5v4a7 7 0 0 1-7 7h-8a7 7 0 0 1-7-7Z"/>
+    <path fill="#0A84FF" d="M23 18h18v3H23Zm0 7h18v3H23Z"/>
+  </g>
+</svg>
+</div><div style="width:48px"><svg class="art" style="width:48px;height:48px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="Mihari">
+  <rect width="16" height="16" rx="3.5" fill="#06070F"/>
+  <g transform="translate(0.5 0.5) scale(0.234375)">
+    <path fill="#F5F7FF" fill-rule="evenodd" d="M22 6h20a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Zm2 5a1 1 0 0 0-1 1v22a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1ZM24 40h5L17 58h-6ZM35 40h5v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4h5v4a7 7 0 0 1-7 7h-8a7 7 0 0 1-7-7Z"/>
+    <path fill="#0A84FF" d="M23 18h18v3H23Zm0 7h18v3H23Z"/>
+  </g>
+</svg>
+</div><div style="width:64px"><svg class="art" style="width:64px;height:64px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="Mihari">
+  <rect width="16" height="16" rx="3.5" fill="#06070F"/>
+  <g transform="translate(0.5 0.5) scale(0.234375)">
+    <path fill="#F5F7FF" fill-rule="evenodd" d="M22 6h20a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Zm2 5a1 1 0 0 0-1 1v22a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1ZM24 40h5L17 58h-6ZM35 40h5v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4h5v4a7 7 0 0 1-7 7h-8a7 7 0 0 1-7-7Z"/>
+    <path fill="#0A84FF" d="M23 18h18v3H23Zm0 7h18v3H23Z"/>
+  </g>
+</svg>
+</div>
+  </div>
+
+  <h2>Couleurs</h2>
+  <div class="grid">
+    <div class="swatch"><div style="background:#06070F"></div><div>Nuit · #06070F<br>fond, fenêtre de l'app</div></div>
+    <div class="swatch"><div style="background:#0A84FF"></div><div>Bleu système · #0A84FF<br>le regard, les accents</div></div>
+    <div class="swatch"><div style="background:#F5F7FF"></div><div>Lumière · #F5F7FF<br>tracé sur fond sombre</div></div>
+    <div class="swatch"><div style="background:#1C2033"></div><div>Bord · #1C2033<br>contour de l'icône</div></div>
+  </div>
+
+  <h2>Typographie</h2>
+  <p>Inter SemiBold (600), approche −0,5 px. Repli : system-ui, -apple-system, Segoe UI.</p>
+
+  <h2>Pour les développeurs</h2>
+<pre>colors: {
+  night:  "#06070F",
+  blue:   "#0A84FF",
+  light:  "#F5F7FF",
+  border: "#1C2033",
+}
+
+assets/logo/logo-mark.svg   source des tracés (64×64)
+build/appicon.png           icône d'app 1024×1024, rendue depuis logo-icon.svg</pre>
+
+  <footer>Mihari, identité visuelle v1, octobre 2026.</footer>
+</main>
+</body>
+</html>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Component } from "svelte";
-  import { ClockIcon, CpuIcon, GaugeIcon, DesktopTowerIcon, FolderIcon, GitlabLogoIcon, WrenchIcon } from "phosphor-svelte";
+  import { ClockIcon, CpuIcon, GaugeIcon, DesktopTowerIcon, FolderIcon, GearSixIcon, GitlabLogoIcon, WrenchIcon } from "phosphor-svelte";
   import { AppWindow, Sidebar, SidebarItem, SidebarSection } from "$lib/ui";
   import Status from "./components/Status.svelte";
   import Profiles from "./components/Profiles.svelte";
@@ -9,6 +9,10 @@
   import Dev from "./components/Dev.svelte";
   import Projects from "./components/Projects.svelte";
   import Machine from "./components/Machine.svelte";
+  import General from "./components/General.svelte";
+  import UpdateBanner from "./components/UpdateBanner.svelte";
+  import { Events } from "@wailsio/runtime";
+  import { nav } from "$lib/nav.svelte";
 
   type Section = { id: string; label: string; icon: typeof GaugeIcon; component: Component };
 
@@ -19,6 +23,7 @@
     { id: "profiles", label: "Profils", icon: CpuIcon, component: Profiles },
     { id: "machine", label: "Machine", icon: DesktopTowerIcon, component: Machine },
     { id: "schedule", label: "Planning", icon: ClockIcon, component: Schedule },
+    { id: "general", label: "Général", icon: GearSixIcon, component: General },
   ];
 
   // Vite sets DEV under wails3 dev only, so production builds never show it.
@@ -26,16 +31,22 @@
     ? { id: "dev", label: "Dev", icon: WrenchIcon, component: Dev }
     : null;
 
-  let activeId = $state(sections[0].id);
+  // A click on a job notification opens its transcript.
+  $effect(() =>
+    Events.On("desktop:open-job", (event) => {
+      nav.section = "status";
+      nav.jobId = Number(event.data);
+    }),
+  );
   let active = $derived(
-    [...sections, ...(devSection ? [devSection] : [])].find((s) => s.id === activeId) ?? sections[0],
+    [...sections, ...(devSection ? [devSection] : [])].find((s) => s.id === nav.section) ?? sections[0],
   );
 </script>
 
 <AppWindow title={active.label}>
   {#snippet sidebar()}
     <Sidebar label="Sections">
-      <SidebarItem icon={GaugeIcon} selected={activeId === "status"} onclick={() => (activeId = "status")}>
+      <SidebarItem icon={GaugeIcon} selected={nav.section === "status"} onclick={() => (nav.section = "status")}>
         État
       </SidebarItem>
 
@@ -43,8 +54,8 @@
         {#each sections.slice(1) as section (section.id)}
           <SidebarItem
             icon={section.icon}
-            selected={section.id === activeId}
-            onclick={() => (activeId = section.id)}
+            selected={section.id === nav.section}
+            onclick={() => (nav.section = section.id)}
           >
             {section.label}
           </SidebarItem>
@@ -55,8 +66,8 @@
         <SidebarSection title="Développement">
           <SidebarItem
             icon={devSection.icon}
-            selected={activeId === devSection.id}
-            onclick={() => (activeId = devSection.id)}
+            selected={nav.section === devSection.id}
+            onclick={() => (nav.section = devSection.id)}
           >
             {devSection.label}
           </SidebarItem>
@@ -65,5 +76,6 @@
     </Sidebar>
   {/snippet}
 
+  <UpdateBanner />
   <active.component />
 </AppWindow>

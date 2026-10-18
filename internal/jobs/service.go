@@ -122,6 +122,11 @@ type Service struct {
 	Scheduler Engine
 	// Drops a simulated todo once its job ends.
 	RemoveSimulated func(id int)
+	// Called when a job ends, and when an issues period ends with what it did.
+	OnFinished  func(Summary)
+	OnPeriodEnd func(PeriodSummary)
+	// Called with every job's Summary whenever one changes.
+	OnChange func([]Summary)
 
 	mu     sync.Mutex
 	jobs   []*job
@@ -132,6 +137,17 @@ type Service struct {
 	ctx   context.Context
 	// Runs a started job; tests replace it.
 	start func(ctx context.Context, j *job, active scheduler.Active)
+	// When the current issues period began; zero outside one.
+	periodStart time.Time
+}
+
+// PeriodSummary is what an issues period did, for the morning notification.
+type PeriodSummary struct {
+	Profile   string
+	Succeeded int
+	Failed    int
+	// Issues still running when the period ended; they finish on their own.
+	Running int
 }
 
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
@@ -360,6 +376,7 @@ func (s *Service) dispatch() {
 	}
 
 	s.mu.Lock()
+	summary, ended := s.trackPeriod(kind, active)
 	// Outside an issues period, queued issues are dropped: their label stays
 	// on GitLab and the next period's scan finds them again, as they are then.
 	if kind != agent.KindIssues || !active.Ready {
@@ -369,6 +386,9 @@ func (s *Service) dispatch() {
 	}
 	if !active.Ready || active.Draining {
 		s.mu.Unlock()
+		if ended && s.OnPeriodEnd != nil {
+			s.OnPeriodEnd(summary)
+		}
 		return
 	}
 
@@ -409,12 +429,46 @@ func (s *Service) dispatch() {
 		go run(ctx, j, active)
 	}
 	s.mu.Unlock()
+	if ended && s.OnPeriodEnd != nil {
+		s.OnPeriodEnd(summary)
+	}
 	for _, j := range start {
 		s.persist(j)
 	}
 	if len(start) > 0 {
 		s.publish()
 	}
+}
+
+// trackPeriod notes when an issues period starts and, once another kind of
+// profile takes over, sums up the issues it worked on. s.mu must be held.
+func (s *Service) trackPeriod(kind agent.Kind, active scheduler.Active) (PeriodSummary, bool) {
+	if kind == agent.KindIssues && active.Ready {
+		if s.periodStart.IsZero() {
+			s.periodStart = time.Now()
+		}
+		return PeriodSummary{}, false
+	}
+	if s.periodStart.IsZero() || kind == agent.KindIssues {
+		return PeriodSummary{}, false
+	}
+	sum := PeriodSummary{}
+	for _, j := range s.jobs {
+		if j.Kind != agent.KindIssues || j.StartedAt.Before(s.periodStart) {
+			continue
+		}
+		sum.Profile = j.Profile
+		switch j.State {
+		case StateSucceeded:
+			sum.Succeeded++
+		case StateFailed:
+			sum.Failed++
+		case StateRunning:
+			sum.Running++
+		}
+	}
+	s.periodStart = time.Time{}
+	return sum, sum.Succeeded+sum.Failed+sum.Running > 0
 }
 
 func (s *Service) emit(j *job, kind, title, text string) {
@@ -459,6 +513,9 @@ func (s *Service) publish() {
 	s.mu.Unlock()
 	if app := application.Get(); app != nil {
 		app.Event.Emit(UpdatedEvent, list)
+	}
+	if s.OnChange != nil {
+		s.OnChange(list)
 	}
 }
 

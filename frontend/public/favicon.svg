@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="Mihari">
+  <rect width="16" height="16" rx="3.5" fill="#06070F"/>
+  <g transform="translate(0.5 0.5) scale(0.234375)">
+    <path fill="#F5F7FF" fill-rule="evenodd" d="M22 6h20a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Zm2 5a1 1 0 0 0-1 1v22a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1ZM24 40h5L17 58h-6ZM35 40h5v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4h5v4a7 7 0 0 1-7 7h-8a7 7 0 0 1-7-7Z"/>
+    <path fill="#0A84FF" d="M23 18h18v3H23Zm0 7h18v3H23Z"/>
+  </g>
+</svg>

@@ -4,9 +4,12 @@ import (
 	"embed"
 
 	"log"
+	"os"
+	"slices"
 	"time"
 
 	"github.com/Impre-visible/mihari/internal/advisor"
+	"github.com/Impre-visible/mihari/internal/desktop"
 	"github.com/Impre-visible/mihari/internal/engine"
 	"github.com/Impre-visible/mihari/internal/gitlab"
 	"github.com/Impre-visible/mihari/internal/jobs"
@@ -15,6 +18,7 @@ import (
 	"github.com/Impre-visible/mihari/internal/scheduler"
 	"github.com/Impre-visible/mihari/internal/settings"
 	"github.com/Impre-visible/mihari/internal/tasks"
+	"github.com/Impre-visible/mihari/internal/updates"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -36,6 +40,8 @@ func init() {
 	application.RegisterEvent[engine.Download](engine.DownloadEvent)
 	application.RegisterEvent[[]jobs.Summary](jobs.UpdatedEvent)
 	application.RegisterEvent[jobs.TranscriptLine](jobs.TranscriptEvent)
+	application.RegisterEvent[updates.Info](updates.UpdatedEvent)
+	application.RegisterEvent[int](desktop.OpenJobEvent)
 }
 
 // main function serves as the application's entry point. It initializes the application, creates a window,
@@ -49,6 +55,20 @@ func main() {
 	jobsService := &jobs.Service{Scheduler: schedulerService, RemoveSimulated: tasksService.RemoveSimulated}
 	schedulerService.Busy = jobsService.Busy
 	tasksService.OnReady = jobsService.Offer
+
+	desktopService := desktop.New()
+	jobsService.OnFinished = desktopService.JobFinished
+	jobsService.OnPeriodEnd = desktopService.PeriodEnded
+	jobsService.OnChange = func(list []jobs.Summary) {
+		running := 0
+		for _, j := range list {
+			if j.State == jobs.StateRunning {
+				running++
+			}
+		}
+		desktopService.SetRunning(running)
+	}
+	schedulerService.OnError = desktopService.EngineFailed
 
 	// Create a new Wails application by providing the necessary options.
 	// Variables 'Name' and 'Description' are for application metadata.
@@ -68,12 +88,16 @@ func main() {
 			application.NewService(&advisor.Service{Reload: schedulerService.Reload}),
 			application.NewService(jobsService),
 			application.NewService(tasksService),
+			application.NewService(desktopService.Service()),
+			application.NewService(desktopService.Notifier()),
+			application.NewService(&updates.Service{}),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
 		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
+			// Mihari keeps watching from the menu bar once its window is closed.
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
 	})
 
@@ -82,8 +106,10 @@ func main() {
 	// 'Mac' options tailor the window when running on macOS.
 	// 'BackgroundColour' is the background colour of the window.
 	// 'URL' is the URL that will be loaded into the webview.
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title: "Mihari",
+	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		// Launched at login, Mihari starts in the background.
+		Hidden: slices.Contains(os.Args[1:], desktop.HiddenFlag),
+		Title:  "Mihari",
 		// Window sized to the golden ratio (1000 / 618 ≈ 1.618).
 		Width:     1000,
 		Height:    618,
@@ -112,6 +138,8 @@ func main() {
 	}()
 
 	// Run the application. This blocks until the application has been exited.
+	desktopService.Attach(app, window, jobsService.Busy)
+
 	err := app.Run()
 
 	// If an error occurred while running the application, log it and exit.

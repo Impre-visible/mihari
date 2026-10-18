@@ -58,6 +58,8 @@ type Service struct {
 	draining bool
 	// Reports whether jobs are running; set before startup.
 	Busy func() bool
+	// Called when the engine fails to start or stops on its own.
+	OnError func(Snapshot)
 }
 
 // Active is what jobs need from the running engine.
@@ -284,5 +286,8 @@ func (s *Service) set(update func(*Snapshot)) {
 
 	if app := application.Get(); app != nil {
 		app.Event.Emit(UpdatedEvent, snapshot)
+	}
+	if snapshot.State == StateError && previous != StateError && s.OnError != nil {
+		s.OnError(snapshot)
 	}
 }

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" width="320" height="72" role="img" aria-label="Mihari">
+  <g transform="translate(8 8) scale(0.875)">
+    <path fill="#F5F7FF" fill-rule="evenodd" d="M22 6h20a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Zm2 5a1 1 0 0 0-1 1v22a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V12a1 1 0 0 0-1-1ZM24 40h5L17 58h-6ZM35 40h5v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4h5v4a7 7 0 0 1-7 7h-8a7 7 0 0 1-7-7Z"/>
+    <path fill="#0A84FF" d="M23 18h18v3H23Zm0 7h18v3H23Z"/>
+  </g>
+  <text x="80" y="49" font-family="Inter, system-ui, -apple-system, 'Segoe UI', sans-serif" font-weight="600" font-size="36" letter-spacing="-0.5" fill="#F5F7FF">Mihari</text>
+</svg>
