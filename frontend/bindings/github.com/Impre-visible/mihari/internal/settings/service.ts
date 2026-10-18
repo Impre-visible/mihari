@@ -25,7 +25,7 @@ export function GetConfig(): $CancellablePromise<{ [_ in string]?: any } | null>
     return $Call.ByID(310848622);
 }
 
-export function HasGitLabToken(): $CancellablePromise<string> {
+export function HasGitLabToken(): $CancellablePromise<boolean> {
     return $Call.ByID(745216800);
 }
 
