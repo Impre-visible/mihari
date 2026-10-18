@@ -6,7 +6,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/Impre-visible/mihari/internal/engine"
 	"github.com/Impre-visible/mihari/internal/gitlab"
+	"github.com/Impre-visible/mihari/internal/scheduler"
 	"github.com/Impre-visible/mihari/internal/settings"
 	"github.com/Impre-visible/mihari/internal/tasks"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -26,6 +28,8 @@ func init() {
 	// and provide a strongly typed JS/TS API for them.
 	application.RegisterEvent[string]("time")
 	application.RegisterEvent[tasks.Snapshot](tasks.UpdatedEvent)
+	application.RegisterEvent[scheduler.Snapshot](scheduler.UpdatedEvent)
+	application.RegisterEvent[engine.Download](engine.DownloadEvent)
 }
 
 // main function serves as the application's entry point. It initializes the application, creates a window,
@@ -45,6 +49,8 @@ func main() {
 			application.NewService(&settings.Service{}),
 			application.NewService(&gitlab.Service{}),
 			application.NewService(&tasks.Service{}),
+			application.NewService(&scheduler.Service{}),
+			application.NewService(&engine.Service{}),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

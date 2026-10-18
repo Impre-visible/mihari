@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { ArrowClockwiseIcon, WarningCircleIcon } from "phosphor-svelte";
+  import { ArrowClockwiseIcon, CheckCircleIcon, WarningCircleIcon } from "phosphor-svelte";
   import { Browser, Events } from "@wailsio/runtime";
   import { Service as Tasks } from "../../../bindings/github.com/Impre-visible/mihari/internal/tasks";
   import type { Snapshot } from "../../../bindings/github.com/Impre-visible/mihari/internal/tasks/models";
+  import { Service as Scheduler } from "../../../bindings/github.com/Impre-visible/mihari/internal/scheduler";
+  import type { Snapshot as EngineSnapshot } from "../../../bindings/github.com/Impre-visible/mihari/internal/scheduler/models";
   import { Button, FormGroup, FormRow, Spinner } from "$lib/ui";
 
   const ACTIONS: Record<string, string> = {
@@ -13,11 +15,16 @@
   };
 
   let snapshot = $state<Snapshot | null>(null);
+  let engine = $state<EngineSnapshot | null>(null);
   let now = $state(Date.now());
 
   // Go's zero time.Time means no poll has finished yet.
   let polledAt = $derived(snapshot && !snapshot.polledAt.startsWith("0001") ? Date.parse(snapshot.polledAt) : null);
   let todos = $derived(snapshot?.todos ?? []);
+
+  Scheduler.Snapshot()
+    .then((s) => (engine = s))
+    .catch((err) => console.error("Load engine:", err));
 
   Tasks.Snapshot()
     .then((s) => (snapshot = s))
@@ -25,9 +32,11 @@
 
   $effect(() => {
     const off = Events.On("tasks:updated", (event) => (snapshot = event.data));
+    const offEngine = Events.On("engine:updated", (event) => (engine = event.data));
     const timer = setInterval(() => (now = Date.now()), 1000);
     return () => {
       off();
+      offEngine();
       clearInterval(timer);
     };
   });
@@ -41,6 +50,33 @@
 </script>
 
 <p class="p-body text-secondary-label">Modèle chargé, jobs en cours et en attente.</p>
+
+<FormGroup title="Moteur" class="mt-6">
+  {#if !engine || engine.state === "idle"}
+    <FormRow label="Aucun profil prévu en ce moment" detail="Le planning est en pause." />
+  {:else}
+    <FormRow label="Profil" detail={engine.profileName} />
+    <FormRow label="Modèle" detail="{engine.model} · {engine.engine}" />
+    <FormRow label="Jobs en parallèle" detail={String(engine.maxJobs)} />
+    <div class="p-form-row gap-1.5">
+      <span class="p-form-row-label">État</span>
+      {#if engine.state === "starting"}
+        <Spinner small label="Chargement du modèle" />
+        <span class="text-secondary-label">Chargement du modèle…</span>
+      {:else if engine.state === "ready"}
+        <CheckCircleIcon size={16} weight="fill" class="shrink-0 text-(--p-sys-green)" aria-hidden="true" />
+        <span class="text-secondary-label">Prêt sur {engine.url}</span>
+      {:else}
+        <WarningCircleIcon size={16} weight="fill" class="shrink-0 text-(--p-sys-red)" aria-hidden="true" />
+        <span class="text-secondary-label">Erreur</span>
+        <Button size="small" onclick={() => Scheduler.Reload()}>Relancer</Button>
+      {/if}
+    </div>
+    {#if engine.state === "error"}
+      <p class="p-form-row p-subhead-2 py-2.5 text-label select-text">{engine.error}</p>
+    {/if}
+  {/if}
+</FormGroup>
 
 <div class="mt-6 flex items-center gap-2">
   <p class="p-subhead-2 flex min-w-0 flex-1 items-center gap-1.5" role="status">

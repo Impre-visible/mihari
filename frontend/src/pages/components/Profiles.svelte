@@ -1,7 +1,27 @@
 <script lang="ts">
-  import { CheckCircleIcon, PlusIcon, TrashIcon, WarningCircleIcon } from "phosphor-svelte";
+  import { CheckCircleIcon, DownloadSimpleIcon, PlusIcon, TrashIcon, WarningCircleIcon } from "phosphor-svelte";
+  import { Events } from "@wailsio/runtime";
   import { Service as Settings } from "../../../bindings/github.com/Impre-visible/mihari/internal/settings";
-  import { Button, FormGroup, FormRow, Select, Spinner, TextArea, TextField } from "$lib/ui";
+  import { Service as Scheduler } from "../../../bindings/github.com/Impre-visible/mihari/internal/scheduler";
+  import { Service as Engine } from "../../../bindings/github.com/Impre-visible/mihari/internal/engine";
+  import type {
+    Download,
+    Info as EngineInfo,
+    Kind,
+    Presence,
+  } from "../../../bindings/github.com/Impre-visible/mihari/internal/engine/models";
+  import {
+    Button,
+    FormGroup,
+    FormRow,
+    ProgressCircle,
+    SegmentedControl,
+    Select,
+    Spinner,
+    Stepper,
+    TextArea,
+    TextField,
+  } from "$lib/ui";
   import { PROMPT_PRESETS } from "./prompts";
 
   type Status =
@@ -11,9 +31,34 @@
     | { kind: "error"; message: string };
 
   // The schedule refers to profiles by id, so renaming one keeps its segments.
-  type Profile = { id: string; name: string; model: string; prompt: string };
+  type Trigger = "ping" | "issues";
+  type Profile = {
+    id: string;
+    name: string;
+    prompt: string;
+    engine: string;
+    model: string;
+    contextPerJob: number;
+    maxJobs: number;
+    trigger: Trigger;
+    label: string;
+    extraArgs: string;
+  };
+
+  const TRIGGERS: { value: Trigger; label: string }[] = [
+    { value: "ping", label: "Ping" },
+    { value: "issues", label: "Issues" },
+  ];
 
   let profiles = $state<Profile[]>([]);
+  let engines = $state<EngineInfo[]>([]);
+  let engineOptions = $derived(
+    engines.map((e) => ({
+      value: e.kind as string,
+      label: e.supported ? (e.installed ? e.label : `${e.label} (non installé)`) : `${e.label} (indisponible ici)`,
+      disabled: !e.supported,
+    })),
+  );
   let status = $state<Status>({ kind: "idle" });
 
   let busy = $derived(status.kind === "busy");
@@ -28,24 +73,98 @@
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
 
-  function parse(value: unknown): Profile | null {
-    if (typeof value !== "object" || value === null) return null;
-    const { id, name, model, prompt } = value as Record<string, unknown>;
-    if (typeof id !== "string" || typeof name !== "string") return null;
+  function blank(): Profile {
     return {
-      id,
-      name,
-      model: typeof model === "string" ? model : "",
-      prompt: typeof prompt === "string" ? prompt : "",
+      id: newId(),
+      name: "",
+      prompt: "",
+      engine: engines.find((e) => e.supported && e.installed)?.kind ?? "llama-server",
+      model: "",
+      contextPerJob: 32768,
+      maxJobs: 1,
+      trigger: "ping",
+      label: "",
+      extraArgs: "",
     };
   }
 
-  Settings.GetConfig()
-    .then((config) => {
+  // Profiles saved before a field existed get its default, as in internal/profiles.
+  function parse(value: unknown): Profile | null {
+    if (typeof value !== "object" || value === null) return null;
+    const v = value as Record<string, unknown>;
+    if (typeof v.id !== "string" || typeof v.name !== "string") return null;
+    const text = (x: unknown) => (typeof x === "string" ? x : "");
+    const count = (x: unknown, fallback: number) => (Number.isInteger(x) && (x as number) > 0 ? (x as number) : fallback);
+    return {
+      id: v.id,
+      name: v.name,
+      prompt: text(v.prompt),
+      engine: text(v.engine) || "llama-server",
+      model: text(v.model),
+      contextPerJob: count(v.contextPerJob, 32768),
+      maxJobs: count(v.maxJobs, 1),
+      trigger: v.trigger === "issues" ? "issues" : "ping",
+      label: text(v.label),
+      extraArgs: text(v.extraArgs),
+    };
+  }
+
+  Promise.all([Settings.GetConfig(), Scheduler.Engines()])
+    .then(([config, catalog]) => {
+      engines = catalog ?? [];
       const stored = Array.isArray(config?.profiles) ? config.profiles : [];
       profiles = stored.map(parse).filter((p): p is Profile => p !== null);
+      profiles.forEach(refreshPresence);
     })
     .catch((err) => console.error("Load profiles:", err));
+
+  function engineOf(p: Profile) {
+    return engines.find((e) => e.kind === p.engine);
+  }
+
+  // Keyed by engine and model, since two profiles can share a model.
+  let presences = $state<Record<string, Presence>>({});
+  let downloads = $state<Record<string, Download>>({});
+  let downloadError = $state<string | null>(null);
+
+  function modelKey(engine: string, model: string) {
+    return `${engine}|${model.trim()}`;
+  }
+
+  function refreshPresence(p: Profile) {
+    const key = modelKey(p.engine, p.model);
+    if (p.model.trim() === "") return;
+    Engine.Presence(p.engine as Kind, p.model.trim())
+      .then((presence) => (presences[key] = presence))
+      .catch((err) => console.error("Model presence:", err));
+  }
+
+  $effect(() => {
+    Engine.Downloads().then((list) => {
+      for (const d of list ?? []) downloads[modelKey(d.engine, d.model)] = d;
+    });
+    return Events.On("model:download", (event) => {
+      const d = event.data;
+      const key = modelKey(d.engine, d.model);
+      downloads[key] = d;
+      if (d.state === "failed") downloadError = d.error;
+      if (d.state === "done") {
+        presences[key] = "ready" as Presence;
+        // An engine that failed for want of this model can start now.
+        Scheduler.Reload();
+      }
+    });
+  });
+
+  function startDownload(p: Profile) {
+    delete downloads[modelKey(p.engine, p.model)];
+    downloadError = null;
+    Engine.Download(p.engine as Kind, p.model.trim());
+  }
+
+  function megabytes(bytes: number) {
+    return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} Go` : `${Math.round(bytes / 1e6)} Mo`;
+  }
 
   function validate(list: Profile[]): string | null {
     const names = new Set<string>();
@@ -56,6 +175,9 @@
       names.add(name.toLowerCase());
       if (p.model.trim() === "") return `${name} : aucun modèle renseigné.`;
       if (p.prompt.trim() === "") return `${name} : le prompt est vide.`;
+      if (!Number.isInteger(p.maxJobs) || p.maxJobs < 1) return `${name} : il faut au moins 1 job en parallèle.`;
+      if (!Number.isInteger(p.contextPerJob) || p.contextPerJob < 4096) return `${name} : contexte trop petit.`;
+      if (p.trigger === "issues" && p.label.trim() === "") return `${name} : indique le label des issues à traiter.`;
     }
     return null;
   }
@@ -70,7 +192,7 @@
   }
 
   function add() {
-    profiles.push({ id: newId(), name: "", model: "", prompt: "" });
+    profiles.push(blank());
     resetStatus();
   }
 
@@ -84,8 +206,16 @@
     try {
       await Settings.Set(
         "profiles",
-        profiles.map((p) => ({ id: p.id, name: p.name.trim(), model: p.model.trim(), prompt: p.prompt })),
+        profiles.map((p) => ({
+          ...p,
+          name: p.name.trim(),
+          model: p.model.trim(),
+          label: p.trigger === "issues" ? p.label.trim() : "",
+          extraArgs: p.extraArgs.trim(),
+        })),
       );
+      // The scheduler restarts the engine if the active profile changed.
+      Scheduler.Reload();
       status = { kind: "ok", message: "Profils enregistrés." };
     } catch (err) {
       status = { kind: "error", message: err instanceof Error ? err.message : String(err) };
@@ -97,7 +227,7 @@
   }
 </script>
 
-<p class="p-body text-secondary-label">Un modèle et le prompt qu'il reçoit. Le planning dit quand chacun tourne.</p>
+<p class="p-body text-secondary-label">Un moteur, un modèle et le prompt qu'il reçoit. Le planning dit quand chacun tourne.</p>
 
 <form
   class="mt-6"
@@ -123,14 +253,118 @@
           </Button>
         </div>
       </FormRow>
-      <FormRow label="Modèle" for="profile-{p.id}-model">
-        <TextField
-          id="profile-{p.id}-model"
-          class="me-7 w-72"
-          placeholder="Qwen/Qwen2.5-Coder-32B-Instruct"
-          bind:value={p.model}
+      <FormRow label="Moteur" for="profile-{p.id}-engine">
+        <Select
+          id="profile-{p.id}-engine"
+          class="me-7"
+          options={engineOptions}
+          bind:value={p.engine}
+          onchange={() => {
+            resetStatus();
+            refreshPresence(p);
+          }}
         />
       </FormRow>
+      {#if engineOf(p) && !engineOf(p)?.installed}
+        <div class="p-form-row py-2.5">
+          <WarningCircleIcon size={16} weight="fill" class="shrink-0 text-(--p-sys-orange)" aria-hidden="true" />
+          <p class="p-subhead-2 min-w-0 flex-1 text-secondary-label">
+            {engineOf(p)?.label} n'est pas installé sur cette machine. Pour l'installer :
+            <code class="font-mono text-label select-text">{engineOf(p)?.install}</code>
+          </p>
+        </div>
+      {/if}
+      <FormRow label="Modèle" for="profile-{p.id}-model">
+        {@const key = modelKey(p.engine, p.model)}
+        {@const download = downloads[key]}
+        <div class="flex items-center gap-2">
+          <TextField
+            id="profile-{p.id}-model"
+            class="w-72 font-mono"
+            placeholder={engineOf(p)?.modelHint ?? ""}
+            bind:value={p.model}
+            onchange={() => refreshPresence(p)}
+          />
+          <!-- Same footprint as the trash button above, so the fields line up. -->
+          <span class="flex w-5 justify-center">
+            {#if p.model.trim() === ""}
+              <!-- Nothing to fetch yet. -->
+            {:else if download?.state === "running"}
+              <button
+                type="button"
+                class="cursor-default"
+                title="{download.total > 0
+                  ? `${megabytes(download.completed)} / ${megabytes(download.total)}`
+                  : 'Téléchargement…'} · cliquer pour annuler"
+                onclick={() => Engine.CancelDownload(p.engine as Kind, p.model.trim())}
+              >
+                {#if download.total > 0}
+                  <ProgressCircle small label="Téléchargement du modèle" value={(download.completed / download.total) * 100} />
+                {:else}
+                  <Spinner small label="Téléchargement du modèle" />
+                {/if}
+              </button>
+            {:else if presences[key] === "ready"}
+              <span title="Modèle téléchargé">
+                <CheckCircleIcon size={16} weight="fill" class="text-(--p-sys-green)" aria-label="Modèle téléchargé" />
+              </span>
+            {:else if presences[key] === "nofile"}
+              <span title="Fichier introuvable sur cette machine">
+                <WarningCircleIcon size={16} weight="fill" class="text-(--p-sys-orange)" aria-label="Fichier introuvable" />
+              </span>
+            {:else}
+              <Button
+                size="small"
+                variant="borderless"
+                iconOnly
+                aria-label={download?.state === "failed" ? "Réessayer le téléchargement" : "Télécharger le modèle"}
+                title={download?.state === "failed" ? download.error : "Télécharger le modèle"}
+                disabled={!engineOf(p)?.installed}
+                onclick={() => startDownload(p)}
+              >
+                {#if download?.state === "failed"}
+                  <WarningCircleIcon size={14} weight="fill" class="text-(--p-sys-red)" aria-hidden="true" />
+                {:else}
+                  <DownloadSimpleIcon size={14} aria-hidden="true" />
+                {/if}
+              </Button>
+            {/if}
+          </span>
+        </div>
+      </FormRow>
+      <FormRow label="Jobs en parallèle" for="profile-{p.id}-jobs">
+        <Stepper id="profile-{p.id}-jobs" class="me-7 w-20" min={1} max={64} step={1} bind:value={p.maxJobs} />
+      </FormRow>
+      <FormRow label="Contexte par job (tokens)" for="profile-{p.id}-context">
+        <Stepper
+          id="profile-{p.id}-context"
+          class="me-7 w-28"
+          min={4096}
+          step={4096}
+          bind:value={p.contextPerJob}
+        />
+      </FormRow>
+      <FormRow label="Arguments du moteur" for="profile-{p.id}-args">
+        <TextField
+          id="profile-{p.id}-args"
+          class="me-7 w-72 font-mono"
+          placeholder={engineOf(p)?.argsHint ?? ""}
+          bind:value={p.extraArgs}
+        />
+      </FormRow>
+      <FormRow label="Déclencheur">
+        <SegmentedControl label="Déclencheur" class="me-7" options={TRIGGERS} bind:value={p.trigger} />
+      </FormRow>
+      {#if p.trigger === "issues"}
+        <FormRow label="Label des issues" for="profile-{p.id}-label">
+          <TextField
+            id="profile-{p.id}-label"
+            class="me-7 w-72 font-mono"
+            placeholder="mihari::todo"
+            bind:value={p.label}
+          />
+        </FormRow>
+      {/if}
       <div class="p-form-row flex-col items-stretch! py-2.5">
         <div class="flex items-center gap-2">
           <label class="p-form-row-label" for="profile-{p.id}-prompt">Prompt</label>
@@ -169,6 +403,9 @@
       {:else if status.kind === "error" || problem}
         <WarningCircleIcon size={16} weight="fill" class="shrink-0 text-(--p-sys-red)" aria-hidden="true" />
         <span class="text-label">{status.kind === "error" ? status.message : problem}</span>
+      {:else if downloadError}
+        <WarningCircleIcon size={16} weight="fill" class="shrink-0 text-(--p-sys-red)" aria-hidden="true" />
+        <span class="text-label select-text">{downloadError}</span>
       {/if}
     </p>
 

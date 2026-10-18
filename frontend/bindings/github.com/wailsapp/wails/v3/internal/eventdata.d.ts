@@ -7,11 +7,19 @@ import type { Events } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import type * as engine$0 from "../../../../Impre-visible/mihari/internal/engine/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import type * as scheduler$0 from "../../../../Impre-visible/mihari/internal/scheduler/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import type * as tasks$0 from "../../../../Impre-visible/mihari/internal/tasks/models.js";
 
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "engine:updated": scheduler$0.Snapshot;
+            "model:download": engine$0.Download;
             "tasks:updated": tasks$0.Snapshot;
             "time": string;
         }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { CheckCircleIcon, PlusIcon, TrashIcon, WarningCircleIcon } from "phosphor-svelte";
   import { Service as Settings } from "../../../bindings/github.com/Impre-visible/mihari/internal/settings";
+  import { Service as Scheduler } from "../../../bindings/github.com/Impre-visible/mihari/internal/scheduler";
   import { Button, FormGroup, FormRow, Select, Spinner, TextField } from "$lib/ui";
 
   type Status =
@@ -144,6 +145,7 @@
         })),
       );
       await Settings.Set("schedule_fallback", fallback);
+      Scheduler.Reload();
       status = { kind: "ok", message: "Planning enregistré." };
     } catch (err) {
       status = { kind: "error", message: err instanceof Error ? err.message : String(err) };
