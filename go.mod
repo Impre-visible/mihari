@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/wailsapp/wails/v3 v3.0.0-beta.31
 	github.com/zalando/go-keyring v0.2.8
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

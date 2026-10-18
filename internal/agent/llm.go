@@ -27,8 +27,9 @@ type toolCall struct {
 type completion struct {
 	Message   message
 	Reasoning string
-	// Tokens the request took, to size the context.
-	PromptTokens int
+	// Tokens the request took, to size the context, and the answer's.
+	PromptTokens     int
+	CompletionTokens int
 }
 
 func chat(ctx context.Context, baseURL, model string, messages []message, tools []Tool) (completion, error) {
@@ -65,7 +66,8 @@ func chat(ctx context.Context, baseURL, model string, messages []message, tools 
 			} `json:"message"`
 		} `json:"choices"`
 		Usage struct {
-			PromptTokens int `json:"prompt_tokens"`
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
 		} `json:"usage"`
 		Error any `json:"error"`
 	}
@@ -91,5 +93,5 @@ func chat(ctx context.Context, baseURL, model string, messages []message, tools 
 	if reasoning == "" {
 		reasoning = m.Reasoning
 	}
-	return completion{Message: msg, Reasoning: reasoning, PromptTokens: out.Usage.PromptTokens}, nil
+	return completion{Message: msg, Reasoning: reasoning, PromptTokens: out.Usage.PromptTokens, CompletionTokens: out.Usage.CompletionTokens}, nil
 }

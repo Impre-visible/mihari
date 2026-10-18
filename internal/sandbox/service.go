@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/Impre-visible/mihari/internal/devmode"
@@ -33,6 +34,18 @@ func NewWorkspace() (string, error) {
 		return "", err
 	}
 	return os.MkdirTemp(dir, "job-")
+}
+
+// ClearCache empties a project's dependency cache, for the Projects page.
+func (s *Service) ClearCache(projectID int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	return ClearCache(ctx, CacheName(projectID))
+}
+
+// CacheName is the dependency cache of a project.
+func CacheName(projectID int) string {
+	return "project-" + strconv.Itoa(projectID)
 }
 
 type TryResult struct {
@@ -84,8 +97,8 @@ func (s *Service) Try(projectID int, ref, command string) (TryResult, error) {
 		return TryResult{}, err
 	}
 
-	image := config.Image(projectID)
-	c, err := Start(ctx, Spec{Image: image, Workspace: repo})
+	image, _ := PickImage(config, projectID, repo)
+	c, err := Start(ctx, Spec{Image: image, Workspace: repo, Cache: CacheName(projectID)})
 	if err != nil {
 		return TryResult{}, err
 	}

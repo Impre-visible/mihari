@@ -24,6 +24,7 @@ import type * as updates$0 from "../../../../Impre-visible/mihari/internal/updat
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "bench:updated": jobs$0.Bench;
             "desktop:open-job": number;
             "engine:updated": scheduler$0.Snapshot;
             "job:event": jobs$0.TranscriptLine;

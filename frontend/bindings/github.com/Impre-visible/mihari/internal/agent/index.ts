@@ -6,5 +6,6 @@ export {
 } from "./models.js";
 
 export type {
-    Event
+    Event,
+    Post
 } from "./models.js";

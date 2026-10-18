@@ -64,7 +64,7 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 	if err != nil {
 		return nil, cleanup, err
 	}
-	env := &agent.Env{Kind: j.Kind, GitLab: client, Target: target, Requester: j.Author}
+	env := &agent.Env{Kind: j.Kind, GitLab: client, Target: target, Requester: j.Author, DryRun: j.dry}
 
 	switch target.Type {
 	case gitlab.MergeRequestTarget:
@@ -85,7 +85,7 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 		if err := client.Relabel(ctx, target.IID, []string{LabelDoing}, remove); err != nil {
 			return env, cleanup, fmt.Errorf("pose du label %s : %w", LabelDoing, err)
 		}
-	} else {
+	} else if !j.dry {
 		if id, err := client.React(ctx, target, "eyes"); err == nil {
 			j.awardID = id
 		} else {
@@ -142,16 +142,23 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 		return env, cleanup, err
 	}
 
-	image := config.Image(j.ProjectID)
-	s.emit(j, "info", "Préparation", "Démarrage du container "+image+"…")
-	container, err := sandbox.Start(ctx, sandbox.Spec{Image: image, Workspace: repo})
+	image, source := sandbox.PickImage(config, j.ProjectID, repo)
+	s.emit(j, "info", "Préparation", "Démarrage du container "+image+" ("+source+")…")
+	spec := sandbox.Spec{Image: image, Workspace: repo, Cache: sandbox.CacheName(j.ProjectID)}
+	container, err := sandbox.Start(ctx, spec)
+	if err != nil && image != config.DefaultImage && source != "réglage du projet" {
+		// A CI image can be private or need a registry login: the default still works.
+		s.emit(j, "info", "Préparation", "Image CI inutilisable ("+err.Error()+"), repli sur "+config.DefaultImage+"…")
+		spec.Image = config.DefaultImage
+		container, err = sandbox.Start(ctx, spec)
+	}
 	if err != nil {
 		return env, cleanup, err
 	}
 	cleanups = append(cleanups, func() { _ = container.Close() })
 	env.Runner = container
 
-	if branch != "" {
+	if branch != "" && !j.dry {
 		pushed := false
 		env.Push = func(ctx context.Context, message string) (string, error) {
 			sha, err := s.push(ctx, client, container, repo, branch, message, j.Author)
@@ -191,7 +198,11 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 		}
 	}
 
-	j.systemPrompt = systemPrompt(active.Profile.Prompt, config.Project(j.ProjectID).Instructions, readMihariMD(repo))
+	if !j.dry {
+		env.Remember = func(note string) error { return projects.Remember(j.ProjectID, note) }
+	}
+	env.ReviewedSHA = j.reviewedSHA
+	j.systemPrompt = systemPrompt(active.Profile.Prompt, config.Project(j.ProjectID).Instructions, repo, projects.Memory(j.ProjectID))
 	j.taskPrompt = taskPrompt(j, env)
 	return env, cleanup, nil
 }
@@ -381,6 +392,10 @@ func (s *Service) finish(j *job, env *agent.Env, outcome agent.Outcome, runErr e
 }
 
 func (s *Service) finishPing(ctx context.Context, j *job, env *agent.Env, state State, reason string, outcome agent.Outcome) {
+	// The next /review starts from the commit this job saw.
+	if state == StateSucceeded && env.Target.Type == gitlab.MergeRequestTarget && env.OpenedMR == nil {
+		markReviewed(j.ProjectID, env.Target.IID, env.MR.HeadSHA)
+	}
 	// The model's summary is the answer when it forgot to post one.
 	if state == StateSucceeded && !env.Replied && outcome.Summary != "" {
 		s.post(ctx, env, outcome.Summary)

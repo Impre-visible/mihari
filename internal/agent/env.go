@@ -41,12 +41,36 @@ type Env struct {
 	Push func(ctx context.Context, message string) (string, error)
 	// Pushes the job's branch and opens a draft merge request; nil where not allowed.
 	OpenMR func(ctx context.Context, title, description string) (gitlab.MergeRequest, error)
+	// Keeps a note about the project for later jobs.
+	Remember func(note string) error
+	// Set for an incremental review: the commit the last review covered.
+	ReviewedSHA string
+	// Dry run: what would be posted on GitLab is kept in Posts instead.
+	DryRun bool
+	Posts  []Post
 
 	// Set by tools.
 	Replied  bool
 	Finished *Finish
 	Pushes   []string
 	OpenedMR *gitlab.MergeRequest
+}
+
+// Post is something a tool would have posted on GitLab during a dry run.
+type Post struct {
+	// comment, suggestion, reply.
+	Kind string `json:"kind"`
+	Path string `json:"path"`
+	Line int    `json:"line"`
+	Body string `json:"body"`
+}
+
+// keep records p instead of posting it, and reports whether the run is dry.
+func (e *Env) keep(p Post) bool {
+	if e.DryRun {
+		e.Posts = append(e.Posts, p)
+	}
+	return e.DryRun
 }
 
 // Finish is how the model ends the job.

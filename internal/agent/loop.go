@@ -33,6 +33,9 @@ type Outcome struct {
 	Success bool
 	Summary string
 	Turns   int
+	// Summed over every model call, as the engine counted them.
+	PromptTokens     int
+	CompletionTokens int
 }
 
 const trimmed = "[sortie retirée pour libérer du contexte]"
@@ -56,9 +59,15 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 	// Characters per token, measured on the engine's own counts as the job goes.
 	charsPerToken := 3.5
 	idle := 0
+	var promptTokens, completionTokens int
+	// Every way out reports the tokens spent so far.
+	out := func(o Outcome) Outcome {
+		o.PromptTokens, o.CompletionTokens = promptTokens, completionTokens
+		return o
+	}
 	for turn := 1; ; turn++ {
 		if turn > cfg.MaxTurns {
-			return Outcome{Turns: turn - 1}, fmt.Errorf("limite de %d tours atteinte", cfg.MaxTurns)
+			return out(Outcome{Turns: turn - 1}), fmt.Errorf("limite de %d tours atteinte", cfg.MaxTurns)
 		}
 		messages = fitContext(messages, cfg.ContextTokens, charsPerToken)
 		// Recomputed each turn: opening a merge request makes its tools available.
@@ -71,13 +80,15 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 		res, err := chat(ctx, cfg.URL, cfg.Model, messages, tools)
 		if err != nil {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return Outcome{Turns: turn}, fmt.Errorf("délai de %s dépassé", cfg.Timeout)
+				return out(Outcome{Turns: turn}), fmt.Errorf("délai de %s dépassé", cfg.Timeout)
 			}
 			if ctx.Err() != nil {
-				return Outcome{Turns: turn}, ctx.Err()
+				return out(Outcome{Turns: turn}), ctx.Err()
 			}
-			return Outcome{Turns: turn}, err
+			return out(Outcome{Turns: turn}), err
 		}
+		promptTokens += res.PromptTokens
+		completionTokens += res.CompletionTokens
 		if res.PromptTokens > 0 {
 			charsPerToken = float64(size(messages)) / float64(res.PromptTokens)
 		}
@@ -92,7 +103,7 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 		if len(res.Message.ToolCalls) == 0 {
 			idle++
 			if idle >= maxIdleAnswers {
-				return Outcome{Turns: turn}, errors.New("le modèle répond sans appeler d'outil")
+				return out(Outcome{Turns: turn}), errors.New("le modèle répond sans appeler d'outil")
 			}
 			messages = append(messages, message{Role: "user",
 				Content: "Continue en appelant les outils. Quand tu as terminé, appelle finish."})
@@ -119,7 +130,7 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 		}
 
 		if env.Finished != nil {
-			return Outcome{Success: env.Finished.Success, Summary: env.Finished.Summary, Turns: turn}, nil
+			return out(Outcome{Success: env.Finished.Success, Summary: env.Finished.Summary, Turns: turn}), nil
 		}
 
 		// News from the thread rides along with the latest tool result.

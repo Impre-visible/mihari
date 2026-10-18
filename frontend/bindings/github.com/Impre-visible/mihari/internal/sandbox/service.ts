@@ -15,6 +15,13 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as $models from "./models.js";
 
 /**
+ * ClearCache empties a project's dependency cache, for the Projects page.
+ */
+export function ClearCache(projectID: number): $CancellablePromise<void> {
+    return $Call.ByID(3347413027, projectID);
+}
+
+/**
  * Info reports the container runtime jobs would use.
  */
 export function Info(): $CancellablePromise<$models.Info> {

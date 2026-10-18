@@ -31,3 +31,17 @@ export function List(): $CancellablePromise<$models.Overview> {
 export function Members(projectID: number): $CancellablePromise<gitlab$0.Member[] | null> {
     return $Call.ByID(3514150884, projectID);
 }
+
+/**
+ * Memory returns a project's notes for the Projects page.
+ */
+export function Memory(projectID: number): $CancellablePromise<string> {
+    return $Call.ByID(957304666, projectID);
+}
+
+/**
+ * SetMemory saves notes edited on the Projects page.
+ */
+export function SetMemory(projectID: number, text: string): $CancellablePromise<void> {
+    return $Call.ByID(1163366624, projectID, text);
+}

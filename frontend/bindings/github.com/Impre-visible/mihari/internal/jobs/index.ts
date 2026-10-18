@@ -11,6 +11,8 @@ export {
 } from "./models.js";
 
 export type {
+    Bench,
+    BenchRun,
     Summary,
     TranscriptLine
 } from "./models.js";

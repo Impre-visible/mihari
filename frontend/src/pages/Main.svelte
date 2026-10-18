@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Component } from "svelte";
-  import { ClockIcon, CpuIcon, GaugeIcon, DesktopTowerIcon, FolderIcon, GearSixIcon, GitlabLogoIcon, WrenchIcon } from "phosphor-svelte";
+  import { ClockIcon, CpuIcon, GaugeIcon, DesktopTowerIcon, FlaskIcon, FolderIcon, GearSixIcon, GitlabLogoIcon, WrenchIcon } from "phosphor-svelte";
   import { AppWindow, Sidebar, SidebarItem, SidebarSection } from "$lib/ui";
   import Status from "./components/Status.svelte";
   import Profiles from "./components/Profiles.svelte";
@@ -10,6 +10,7 @@
   import Projects from "./components/Projects.svelte";
   import Machine from "./components/Machine.svelte";
   import General from "./components/General.svelte";
+  import Bench from "./components/Bench.svelte";
   import UpdateBanner from "./components/UpdateBanner.svelte";
   import { Events } from "@wailsio/runtime";
   import { nav } from "$lib/nav.svelte";
@@ -22,6 +23,7 @@
     { id: "projects", label: "Projets", icon: FolderIcon, component: Projects },
     { id: "profiles", label: "Profils", icon: CpuIcon, component: Profiles },
     { id: "machine", label: "Machine", icon: DesktopTowerIcon, component: Machine },
+    { id: "bench", label: "Banc d'essai", icon: FlaskIcon, component: Bench },
     { id: "schedule", label: "Planning", icon: ClockIcon, component: Schedule },
     { id: "general", label: "Général", icon: GearSixIcon, component: General },
   ];

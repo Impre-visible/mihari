@@ -56,14 +56,18 @@ type Note struct {
 type Discussion struct {
 	ID    string `json:"id"`
 	Notes []Note `json:"notes"`
+	// A thread on a diff line that nobody has resolved yet.
+	Open bool `json:"open"`
 }
 
 type apiNote struct {
-	ID        int       `json:"id"`
-	Body      string    `json:"body"`
-	System    bool      `json:"system"`
-	CreatedAt time.Time `json:"created_at"`
-	Author    struct {
+	ID         int       `json:"id"`
+	Resolvable bool      `json:"resolvable"`
+	Resolved   bool      `json:"resolved"`
+	Body       string    `json:"body"`
+	System     bool      `json:"system"`
+	CreatedAt  time.Time `json:"created_at"`
+	Author     struct {
 		Username string `json:"username"`
 	} `json:"author"`
 	Position *struct {
@@ -84,6 +88,9 @@ func (d apiDiscussion) convert() Discussion {
 	for _, n := range d.Notes {
 		if n.System {
 			continue
+		}
+		if n.Resolvable && !n.Resolved {
+			disc.Open = true
 		}
 		note := Note{ID: n.ID, Body: n.Body, Author: n.Author.Username, CreatedAt: n.CreatedAt}
 		if n.Position != nil {

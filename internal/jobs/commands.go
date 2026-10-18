@@ -16,6 +16,7 @@ import (
 // They act at once, without the model, whatever profile is active.
 const helpText = `Ce que je comprends, juste après ma mention :
 
+- **/review** : relit la MR. Si je l'ai déjà relue, seulement ce qui a changé depuis, et je dis lesquelles de mes remarques sont corrigées.
 - **/stop** : arrête tous mes jobs sur cette MR ou cette issue, en cours et en attente.
 - **/retry** : relance mon dernier job ici, avec la même demande.
 - **/help** : cette aide.
@@ -47,6 +48,8 @@ func (s *Service) command(t gitlab.Todo) bool {
 		answer = s.stopTarget(t)
 	case "retry":
 		answer = s.retry(t)
+	case "review":
+		answer = s.review(t)
 	case "help":
 		answer = helpText
 	default:
@@ -124,6 +127,41 @@ func (s *Service) retry(t gitlab.Todo) string {
 	s.poke()
 	return "🔁 Je relance mon dernier job ici."
 }
+
+// review queues a review of the merge request, limited to what changed since
+// the bot's last one when there is one.
+func (s *Service) review(t gitlab.Todo) string {
+	if t.TargetType != gitlab.MergeRequestTarget {
+		return "**/review** ne marche que sur une merge request."
+	}
+	since := LastReviewed(t.ProjectID, t.IID)
+	request := incrementalRequest
+	if since == "" {
+		request = ""
+	}
+	queued := t
+	queued.Body, queued.Action = request, "review_requested"
+	s.enqueue(&job{
+		Summary: Summary{
+			Kind: agent.KindPing, TargetType: t.TargetType, Project: t.Project, ProjectID: t.ProjectID,
+			IID: t.IID, Title: t.Title, URL: t.URL, Author: t.Author, Request: request, Simulated: t.Simulated,
+		},
+		todo:        queued,
+		reviewedSHA: since,
+	})
+	s.publish()
+	s.poke()
+	if since == "" {
+		return "🔍 Je relis la MR."
+	}
+	return "🔍 Je relis ce qui a changé depuis ma dernière review (" + since[:min(8, len(since))] + ")."
+}
+
+// The request an incremental review starts from.
+const incrementalRequest = "Review incrémentale : relis seulement ce qui a changé depuis ta dernière review, avec get_new_changes. " +
+	"Puis, pour chacun de tes fils encore ouverts (read_comments), regarde si le nouveau code le corrige : " +
+	"si oui, réponds dans ce fil avec reply_to_thread, en une ligne (« Corrigé dans <commit>. »), sans le résoudre. " +
+	"Termine par un court résumé avec reply."
 
 // botName is the account the bot answers to.
 func (s *Service) botName(projectID int) string {

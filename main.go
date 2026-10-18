@@ -42,6 +42,7 @@ func init() {
 	application.RegisterEvent[[]jobs.Summary](jobs.UpdatedEvent)
 	application.RegisterEvent[jobs.TranscriptLine](jobs.TranscriptEvent)
 	application.RegisterEvent[updates.Info](updates.UpdatedEvent)
+	application.RegisterEvent[jobs.Bench](jobs.BenchEvent)
 	application.RegisterEvent[int](desktop.OpenJobEvent)
 }
 

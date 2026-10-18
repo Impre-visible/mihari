@@ -22,6 +22,20 @@ import * as gitlab$0 from "../gitlab/models.js";
 import * as $models from "./models.js";
 
 /**
+ * BenchDetail returns a bench with its transcripts.
+ */
+export function BenchDetail(id: number): $CancellablePromise<$models.Bench> {
+    return $Call.ByID(2430825466, id);
+}
+
+/**
+ * Benches lists past benches, newest first, without their transcripts.
+ */
+export function Benches(): $CancellablePromise<$models.Bench[] | null> {
+    return $Call.ByID(2641591899);
+}
+
+/**
  * Busy reports whether a job is running, which holds the engine in place.
  */
 export function Busy(): $CancellablePromise<boolean> {
@@ -47,6 +61,21 @@ export function List(): $CancellablePromise<$models.Summary[] | null> {
  */
 export function Offer(todos: gitlab$0.Todo[] | null): $CancellablePromise<void> {
     return $Call.ByID(1771137371, todos);
+}
+
+/**
+ * StartBench reviews the merge request at mrURL with each profile, one after
+ * the other. It needs the GPU to itself: no job may be running.
+ */
+export function StartBench(mrURL: string, profileIDs: string[] | null): $CancellablePromise<number> {
+    return $Call.ByID(294220617, mrURL, profileIDs);
+}
+
+/**
+ * StopBench interrupts the running bench; finished runs are kept.
+ */
+export function StopBench(): $CancellablePromise<void> {
+    return $Call.ByID(1418736931);
 }
 
 /**

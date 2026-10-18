@@ -89,6 +89,10 @@ type job struct {
 	// For an issues job: the profile's label, and when it was put on the issue.
 	label   string
 	labelAt time.Time
+	// For an incremental review: the commit the last review covered.
+	reviewedSHA string
+	// A bench run: reads GitLab, writes nothing there.
+	dry bool
 
 	events []agent.Event
 	cancel context.CancelFunc
@@ -114,6 +118,9 @@ type Engine interface {
 	Active() scheduler.Active
 	// Re-checks the schedule, as when the last job of a drained profile ends.
 	Nudge()
+	// Stop the scheduled engine while the bench uses the GPU, then give it back.
+	Hold()
+	Release()
 }
 
 // Service is exposed to the frontend through Wails bindings.
@@ -144,6 +151,7 @@ type Service struct {
 	reply func(t gitlab.Todo, body string)
 	// When the current issues period began; zero outside one.
 	periodStart time.Time
+	bench       benchState
 }
 
 // PeriodSummary is what an issues period did, for the morning notification.

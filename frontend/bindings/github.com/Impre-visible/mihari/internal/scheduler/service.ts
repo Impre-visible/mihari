@@ -38,10 +38,25 @@ export function Engines(): $CancellablePromise<engine$0.Info[] | null> {
 }
 
 /**
+ * Hold stops the scheduled engine and starts none until Release, so that
+ * another user of the GPU has it to itself. Jobs see no engine meanwhile.
+ */
+export function Hold(): $CancellablePromise<void> {
+    return $Call.ByID(1724970345);
+}
+
+/**
  * Nudge re-checks the schedule now, as when the last job of a drained profile ends.
  */
 export function Nudge(): $CancellablePromise<void> {
     return $Call.ByID(1500160023);
+}
+
+/**
+ * Release lets the schedule run its engine again.
+ */
+export function Release(): $CancellablePromise<void> {
+    return $Call.ByID(1116836105);
 }
 
 /**

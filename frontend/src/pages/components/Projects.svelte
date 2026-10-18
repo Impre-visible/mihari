@@ -8,6 +8,7 @@
   import type { Member } from "../../../bindings/github.com/Impre-visible/mihari/internal/gitlab/models";
   import { Service as Settings } from "../../../bindings/github.com/Impre-visible/mihari/internal/settings";
   import { Service as Tasks } from "../../../bindings/github.com/Impre-visible/mihari/internal/tasks";
+  import { Service as Sandbox } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox";
   import {
     Button,
     Checkbox,
@@ -45,6 +46,9 @@
   let query = $state("");
   let expanded = $state<Record<number, boolean>>({});
   let members = $state<Record<number, Member[] | string>>({});
+  // What the agent noted about each project, loaded when it is unfolded.
+  let memory = $state<Record<number, string>>({});
+  let memoryStatus = $state<Record<number, string>>({});
 
   let busy = $derived(status.kind === "busy");
   let visible = $derived(
@@ -72,6 +76,9 @@
 
   function toggle(p: View) {
     expanded[p.id] = !expanded[p.id];
+    if (expanded[p.id] && memory[p.id] === undefined) {
+      Projects.Memory(p.id).then((m) => (memory[p.id] = m));
+    }
     if (expanded[p.id] && members[p.id] === undefined) {
       Projects.Members(p.id)
         .then((list) => (members[p.id] = (list ?? []).sort((a, b) => b.accessLevel - a.accessLevel)))
@@ -123,6 +130,28 @@
       s.image.trim() !== "" ||
       s.instructions.trim() !== ""
     );
+  }
+
+  let cacheStatus = $state<Record<number, string>>({});
+
+  async function clearCache(id: number) {
+    cacheStatus[id] = "Suppression…";
+    try {
+      await Sandbox.ClearCache(id);
+      cacheStatus[id] = "Cache vidé.";
+    } catch (err) {
+      cacheStatus[id] = errorMessage(err);
+    }
+  }
+
+  async function saveMemory(id: number) {
+    memoryStatus[id] = "Enregistrement…";
+    try {
+      await Projects.SetMemory(id, memory[id] ?? "");
+      memoryStatus[id] = "Notes enregistrées.";
+    } catch (err) {
+      memoryStatus[id] = errorMessage(err);
+    }
   }
 
   async function save() {
@@ -241,7 +270,15 @@
             {/each}
           {/if}
           <FormRow label="Image du container" for="image-{p.id}">
-            <TextField id="image-{p.id}" class="w-72 font-mono" placeholder={defaultImage} bind:value={s.image} />
+            <TextField
+              id="image-{p.id}"
+              class="w-72 font-mono"
+              placeholder="celle du job de test de la CI, sinon {defaultImage}"
+              bind:value={s.image}
+            />
+          </FormRow>
+          <FormRow label="Cache des dépendances" detail={cacheStatus[p.id] ?? "npm, pip, go… gardés entre les jobs"}>
+            <Button size="small" onclick={() => clearCache(p.id)}>Vider</Button>
           </FormRow>
           <div class="p-form-row flex-col items-stretch! py-2.5">
             <label class="p-form-row-label" for="instructions-{p.id}">Consignes pour l'agent</label>
@@ -253,9 +290,27 @@
               bind:value={s.instructions}
             />
             <p class="p-sublabel">
-              Ajoutées au prompt du profil, avec le fichier .mihari.md du repo s'il existe sur la branche où l'agent
-              travaille.
+              Ajoutées au prompt du profil, avec AGENTS.md et .mihari.md du repo s'ils existent sur la branche où
+              l'agent travaille.
             </p>
+          </div>
+          <div class="p-form-row flex-col items-stretch! py-2.5">
+            <div class="flex items-center gap-2">
+              <label class="p-form-row-label" for="memory-{p.id}">Notes de Mihari</label>
+              <span class="p-subhead-2 text-secondary-label">{memoryStatus[p.id] ?? ""}</span>
+              <Button size="small" onclick={() => saveMemory(p.id)}>Enregistrer les notes</Button>
+            </div>
+            <TextArea
+              id="memory-{p.id}"
+              rows={4}
+              class="w-full resize-y font-mono"
+              placeholder="Vide : l'agent y écrit ce qu'il apprend du projet (commande de test, conventions…)."
+              value={memory[p.id] ?? ""}
+              oninput={(e) => {
+                memory[p.id] = e.currentTarget.value;
+                memoryStatus[p.id] = "";
+              }}
+            />
           </div>
         {/if}
       </FormGroup>

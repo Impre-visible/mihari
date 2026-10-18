@@ -131,3 +131,18 @@ func TestFitContext(t *testing.T) {
 		t.Errorf("oldest should go first, latest stays")
 	}
 }
+
+func TestSuggestion(t *testing.T) {
+	body, line, err := suggestion(suggestArgs{StartLine: 10, EndLine: 12, Code: "a := 1\nb := 2\n", Comment: "Plus simple."})
+	if err != nil || line != 12 || body != "Plus simple.\n\n```suggestion:-2+0\na := 1\nb := 2\n```" {
+		t.Errorf("got %q, %d, %v", body, line, err)
+	}
+	// Code that holds a fence gets a longer one.
+	body, _, _ = suggestion(suggestArgs{StartLine: 3, Code: "doc := \"```go\"", Comment: "x"})
+	if !strings.Contains(body, "````suggestion:-0+0\n") || !strings.HasSuffix(body, "\n````") {
+		t.Errorf("fence: %q", body)
+	}
+	if _, _, err := suggestion(suggestArgs{StartLine: 5, EndLine: 2}); err == nil {
+		t.Error("reversed range should fail")
+	}
+}

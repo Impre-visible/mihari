@@ -15,8 +15,10 @@ const rules = `## Comment tu travailles
 
 - Le repo est cloné dans /workspace, sur la branche du job. Tes commandes tournent dans un container jetable, avec le réseau. Installe ce qui te manque (apt-get, npm, pip…).
 - Lis le code avant de conclure.
+- Tout ce qui touche à GitLab passe par tes outils (MR, diff, commentaires, pipeline, push, MR à ouvrir). N'appelle jamais l'API GitLab toi-même (curl, wget, scripts) : tu n'as pas d'accès, et tes outils font l'appel correctement.
 - Si tu modifies le code, ne touche qu'à ce qui est demandé, et ne réécris jamais l'historique.
 - Écris tes commentaires et tes réponses dans la langue de la demande.
+- Si tu apprends quelque chose d'utile pour les prochains jobs sur ce projet (commande de test, convention, piège), garde-le avec remember.
 - Quand tout est fait, appelle finish.`
 
 // What each kind of job is for, and the tools that matter for it.
@@ -24,6 +26,7 @@ const (
 	reviewRules = `## Sur une merge request
 
 - Pour une review, utilise get_diff puis read_file autour des changements. Une remarque sur une ligne précise va dans comment_line, une remarque par appel.
+- Quand tu as le correctif exact, utilise suggest_change plutôt que comment_line : l'auteur l'applique en un clic. N'écris jamais toi-même de bloc suggestion dans un commentaire.
 - Si on te demande de modifier le code, modifie les fichiers puis appelle push avec un message de commit clair.
 - Réponds avec reply : ce que tu as fait, ou ta question si la demande n'est pas claire.`
 
@@ -39,23 +42,33 @@ const (
 - read_comments te donne la discussion de l'issue.`
 )
 
-// readMihariMD returns the repository's own instructions for the bot, read on
-// the branch the job works on.
-func readMihariMD(repo string) string {
-	data, err := os.ReadFile(filepath.Join(repo, ".mihari.md"))
+// readRepoFile returns a file at the repository's root, "" when absent.
+func readRepoFile(repo, name string) string {
+	data, err := os.ReadFile(filepath.Join(repo, name))
 	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
 }
 
-func systemPrompt(profilePrompt, projectInstructions, mihariMD string) string {
+// Instructions an agent finds in the repository, in the order they are given.
+var repoInstructions = []struct{ file, title string }{
+	{"AGENTS.md", "Consignes du repo pour les agents (AGENTS.md)"},
+	{".mihari.md", "Consignes du repo pour Mihari (.mihari.md)"},
+}
+
+func systemPrompt(profilePrompt, projectInstructions, repo, memory string) string {
 	parts := []string{strings.TrimSpace(profilePrompt)}
 	if s := strings.TrimSpace(projectInstructions); s != "" {
 		parts = append(parts, "## Consignes du projet\n\n"+s)
 	}
-	if mihariMD != "" {
-		parts = append(parts, "## Consignes du repo (.mihari.md)\n\n"+mihariMD)
+	for _, f := range repoInstructions {
+		if s := readRepoFile(repo, f.file); s != "" {
+			parts = append(parts, "## "+f.title+"\n\n"+s)
+		}
+	}
+	if memory != "" {
+		parts = append(parts, "## Ce que tu as noté sur ce projet lors de jobs précédents\n\n"+memory)
 	}
 	return strings.Join(append(parts, rules), "\n\n")
 }

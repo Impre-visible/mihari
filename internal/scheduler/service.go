@@ -60,6 +60,8 @@ type Service struct {
 	Busy func() bool
 	// Called when the engine fails to start or stops on its own.
 	OnError func(Snapshot)
+	// Something else uses the GPU, like the model bench: no engine runs.
+	held bool
 }
 
 // Active is what jobs need from the running engine.
@@ -80,6 +82,27 @@ func (s *Service) Active() Active {
 		a.Profile = *s.current
 	}
 	return a
+}
+
+// Hold stops the scheduled engine and starts none until Release, so that
+// another user of the GPU has it to itself. Jobs see no engine meanwhile.
+func (s *Service) Hold() {
+	s.mu.Lock()
+	s.held = true
+	if s.cancelStart != nil {
+		s.cancelStart()
+	}
+	s.mu.Unlock()
+	s.stop()
+	s.set(func(snap *Snapshot) { *snap = Snapshot{State: StateIdle, Error: "en pause : banc d'essai en cours"} })
+}
+
+// Release lets the schedule run its engine again.
+func (s *Service) Release() {
+	s.mu.Lock()
+	s.held = false
+	s.mu.Unlock()
+	s.Nudge()
 }
 
 // Nudge re-checks the schedule now, as when the last job of a drained profile ends.
@@ -181,8 +204,11 @@ func (s *Service) reconcile(ctx context.Context) {
 	want, scheduled := config.Active(time.Now())
 
 	s.mu.Lock()
-	current := s.current
+	current, held := s.current, s.held
 	s.mu.Unlock()
+	if held {
+		return
+	}
 
 	// An edited profile counts as a different one, so its engine restarts.
 	if scheduled && current != nil && reflect.DeepEqual(*current, want) {

@@ -15,6 +15,8 @@ type fakeEngine struct{ active scheduler.Active }
 
 func (f *fakeEngine) Active() scheduler.Active { return f.active }
 func (f *fakeEngine) Nudge()                   {}
+func (f *fakeEngine) Hold()                    {}
+func (f *fakeEngine) Release()                 {}
 
 func newTestService(t *testing.T, trigger profiles.Trigger, maxJobs int) (*Service, *fakeEngine, *[]int) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())

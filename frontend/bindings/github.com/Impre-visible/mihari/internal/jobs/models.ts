@@ -8,6 +8,46 @@ import * as agent$0 from "../agent/models.js";
 // @ts-ignore: Unused imports
 import * as gitlab$0 from "../gitlab/models.js";
 
+export interface Bench {
+    "id": number;
+    "mr": string;
+    "title": string;
+    "url": string;
+    "startedAt": string;
+    "endedAt": string;
+    "running": boolean;
+    "runs": BenchRun[] | null;
+}
+
+export interface BenchRun {
+    "profileId": string;
+    "profileName": string;
+    "engine": string;
+    "model": string;
+
+    /**
+     * pending, loading, running, done, failed.
+     */
+    "state": string;
+    "error": string;
+
+    /**
+     * Model load time, apart from the review itself.
+     */
+    "loadMs": number;
+    "durationMs": number;
+    "turns": number;
+    "promptTokens": number;
+    "completionTokens": number;
+    "summary": string;
+    "posts": agent$0.Post[] | null;
+
+    /**
+     * The run's transcript, for a closer look.
+     */
+    "events": agent$0.Event[] | null;
+}
+
 export enum State {
     /**
      * The Go zero value for the underlying type of the enum.

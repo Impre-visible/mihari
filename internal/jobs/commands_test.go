@@ -83,3 +83,31 @@ func TestRetryCommand(t *testing.T) {
 		t.Errorf("help: %q", (*answers)[2])
 	}
 }
+
+func TestReviewCommand(t *testing.T) {
+	s, answers := commandService(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	s.Offer([]gitlab.Todo{mention(-1, 1, "@bot /review")})
+	first := s.List()[0]
+	if !strings.Contains((*answers)[0], "Je relis la MR") || first.Request != "" || s.jobs[0].reviewedSHA != "" {
+		t.Fatalf("first review: %q, %+v", *answers, first)
+	}
+
+	markReviewed(1, 1, "0123456789abcdef")
+	s.Offer([]gitlab.Todo{mention(-2, 1, "@bot /review")})
+	if !strings.Contains((*answers)[1], "depuis ma dernière review (01234567)") {
+		t.Fatalf("second review: %q", (*answers)[1])
+	}
+	last := s.jobs[len(s.jobs)-1]
+	if last.reviewedSHA != "0123456789abcdef" || !strings.Contains(last.Request, "get_new_changes") {
+		t.Errorf("incremental job: sha %q, request %q", last.reviewedSHA, last.Request)
+	}
+
+	issue := mention(-3, 4, "@bot /review")
+	issue.TargetType = gitlab.IssueTarget
+	s.Offer([]gitlab.Todo{issue})
+	if !strings.Contains((*answers)[2], "merge request") {
+		t.Errorf("review on an issue: %q", (*answers)[2])
+	}
+}

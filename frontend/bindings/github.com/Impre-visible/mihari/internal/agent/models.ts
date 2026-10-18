@@ -34,3 +34,16 @@ export enum Kind {
      */
     KindIssues = "issues",
 };
+
+/**
+ * Post is something a tool would have posted on GitLab during a dry run.
+ */
+export interface Post {
+    /**
+     * comment, suggestion, reply.
+     */
+    "kind": string;
+    "path": string;
+    "line": number;
+    "body": string;
+}

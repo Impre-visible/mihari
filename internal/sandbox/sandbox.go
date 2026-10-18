@@ -136,6 +136,68 @@ type Spec struct {
 	// Host directory mounted read-write at Workdir.
 	Workspace string
 	Env       []string
+	// Names a dependency cache kept across jobs at CacheDir, one per
+	// project; "" for none.
+	Cache string
+}
+
+// CacheDir holds package manager caches that survive from one job to the next.
+const CacheDir = "/cache"
+
+// Where common package managers keep their downloads, pointed into CacheDir.
+var cacheEnv = []string{
+	"npm_config_cache=" + CacheDir + "/npm",
+	"npm_config_store_dir=" + CacheDir + "/pnpm",
+	"YARN_CACHE_FOLDER=" + CacheDir + "/yarn",
+	"PIP_CACHE_DIR=" + CacheDir + "/pip",
+	"UV_CACHE_DIR=" + CacheDir + "/uv",
+	"POETRY_CACHE_DIR=" + CacheDir + "/poetry",
+	"GOMODCACHE=" + CacheDir + "/go/mod",
+	"GOCACHE=" + CacheDir + "/go/build",
+	"GRADLE_USER_HOME=" + CacheDir + "/gradle",
+	"COMPOSER_CACHE_DIR=" + CacheDir + "/composer",
+	"BUNDLE_PATH=" + CacheDir + "/bundle",
+}
+
+// cacheMount is the run flag mounting a cache: a named volume for Docker,
+// whose files root may own, a folder of the user cache for Apple's runtime.
+func cacheMount(kind Kind, name string) ([]string, error) {
+	if kind == Docker {
+		return []string{"--mount", "type=volume,src=mihari-cache-" + name + ",dst=" + CacheDir}, nil
+	}
+	dir, err := hostCacheDir(name)
+	if err != nil {
+		return nil, err
+	}
+	return []string{"--volume", dir + ":" + CacheDir}, nil
+}
+
+func hostCacheDir(name string) (string, error) {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(base, "mihari", "caches", name)
+	return dir, os.MkdirAll(dir, 0o700)
+}
+
+// ClearCache deletes a dependency cache; the next job starts it afresh.
+func ClearCache(ctx context.Context, name string) error {
+	cli, info := detect()
+	if cli.kind == Docker {
+		if !info.Installed {
+			return nil
+		}
+		if _, stderr, err := cli.run(ctx, nil, "volume", "rm", "--force", "mihari-cache-"+name); err != nil {
+			return fmt.Errorf("docker volume rm : %s", strings.TrimSpace(stderr))
+		}
+		return nil
+	}
+	dir, err := hostCacheDir(name)
+	if err != nil {
+		return err
+	}
+	return os.RemoveAll(dir)
 }
 
 // Container is a running sandbox; Close must always be called.
@@ -165,8 +227,17 @@ func Start(ctx context.Context, spec Spec) (*Container, error) {
 		// --init reaps the zombies agents' commands leave; no-new-privileges blocks setuid escalation.
 		args = append(args, "--init", "--security-opt", "no-new-privileges", "--pids-limit", "4096")
 	}
-	for _, env := range spec.Env {
-		args = append(args, "--env", env)
+	env := spec.Env
+	if spec.Cache != "" {
+		mount, err := cacheMount(cli.kind, spec.Cache)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, mount...)
+		env = append(append([]string{}, cacheEnv...), env...)
+	}
+	for _, e := range env {
+		args = append(args, "--env", e)
 	}
 	// The container idles until Close; every command is an exec.
 	args = append(args, spec.Image, "sleep", "infinity")
