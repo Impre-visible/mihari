@@ -17,9 +17,21 @@ export function CompleteOnboarding(): $CancellablePromise<void> {
     return $Call.ByID(1990255858);
 }
 
+export function Get(field: string): $CancellablePromise<any> {
+    return $Call.ByID(3393297312, field);
+}
+
+export function GetConfig(): $CancellablePromise<{ [_ in string]?: any } | null> {
+    return $Call.ByID(310848622);
+}
+
 /**
  * IsOnboarded reports whether the user has already gone past the welcome screen.
  */
 export function IsOnboarded(): $CancellablePromise<boolean> {
     return $Call.ByID(3804631834);
+}
+
+export function Set(field: string, value: any): $CancellablePromise<void> {
+    return $Call.ByID(1278439948, field, value);
 }

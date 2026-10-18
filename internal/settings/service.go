@@ -2,6 +2,7 @@
 package settings
 
 import (
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
@@ -11,39 +12,96 @@ import (
 // Service is exposed to the frontend through Wails bindings.
 type Service struct{}
 
-// onboardedPath is the marker file written once the welcome screen is done.
-func onboardedPath() (string, error) {
+func GetConfigPath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "mihari", "onboarded"), nil
+	folder := filepath.Join(dir, "mihari")
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		return "", err
+	}
+	file := filepath.Join(folder, "config.json")
+	return file, nil
 }
 
 // IsOnboarded reports whether the user has already gone past the welcome screen.
 func (s *Service) IsOnboarded() (bool, error) {
-	path, err := onboardedPath()
+	value, err := s.Get("onboarded")
 	if err != nil {
 		return false, err
 	}
-	// Force not onboarded for dev purposes
-	return false, nil
-
-	_, err = os.Stat(path)
-	if errors.Is(err, fs.ErrNotExist) {
+	if value == nil {
 		return false, nil
 	}
-	return err == nil, err
+	onboarded, ok := value.(bool)
+	if !ok {
+		return false, nil
+	}
+	return onboarded, nil
 }
 
 // CompleteOnboarding records that the welcome screen has been seen.
 func (s *Service) CompleteOnboarding() error {
-	path, err := onboardedPath()
+	return s.Set("onboarded", true)
+}
+
+func (s *Service) GetConfig() (map[string]interface{}, error) {
+	filepath, err := GetConfigPath()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(filepath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return map[string]interface{}{}, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+func (s *Service) Get(field string) (interface{}, error) {
+	config, err := s.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	value, ok := config[field]
+	if !ok {
+		return nil, nil
+	}
+
+	return value, nil
+}
+
+func (s *Service) Set(field string, value interface{}) error {
+	filepath, err := GetConfigPath()
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+
+	config, err := s.GetConfig()
+	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, nil, 0o600)
+
+	config[field] = value
+
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(filepath, data, 0o600); err != nil {
+		return err
+	}
+
+	return nil
 }
