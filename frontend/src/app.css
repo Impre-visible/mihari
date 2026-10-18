@@ -1,17 +1,119 @@
-@import "tailwindcss";
+/* Layer order: Tailwind's reset < Puppertino < Tailwind utilities, so a
+   utility class can still adjust a Puppertino component. */
+@layer theme, base, puppertino, components, utilities;
 
-@theme {
-  --color-ink: #06070f;
-  --color-text: #f4f6fb;
-  --color-muted: #9aa6c0;
-  --color-accent: #ff4d4d;
-  --color-accent-2: #ff2d72;
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+@import "tailwindcss";
+/* One file at a time: Tailwind does not follow the bundle's nested
+   `@import url(...)`. Foundations first, then the components we wrap. */
+@import "@codedgar/puppertino/css/color_palette.css" layer(puppertino);
+@import "@codedgar/puppertino/css/colors.css" layer(puppertino);
+@import "@codedgar/puppertino/css/typography.css" layer(puppertino);
+@import "@codedgar/puppertino/css/materials.css" layer(puppertino);
+@import "@codedgar/puppertino/css/shadows.css" layer(puppertino);
+@import "@codedgar/puppertino/css/boxes.css" layer(puppertino);
+@import "@codedgar/puppertino/css/buttons.css" layer(puppertino);
+@import "@codedgar/puppertino/css/forms.css" layer(puppertino);
+@import "@codedgar/puppertino/css/lists.css" layer(puppertino);
+@import "@codedgar/puppertino/css/progress.css" layer(puppertino);
+@import "@codedgar/puppertino/css/segmented-controls.css" layer(puppertino);
+@import "@codedgar/puppertino/css/sidebars.css" layer(puppertino);
+@import "@codedgar/puppertino/css/sliders.css" layer(puppertino);
+@import "@codedgar/puppertino/css/toolbars.css" layer(puppertino);
+@import "@codedgar/puppertino/css/tooltips.css" layer(puppertino);
+@import "@codedgar/puppertino/css/windows.css" layer(puppertino);
+@import "@codedgar/puppertino/css/dark_mode.css" layer(puppertino);
+@import "./lib/ui/ui.css";
+
+/* Puppertino's macOS tokens, exposed as Tailwind utilities
+   (text-label, bg-window, border-separator, text-accent…). */
+@theme inline {
+  --font-sans: var(--p-font);
+  --font-mono: var(--p-font-mono);
+  --color-label: var(--p-text-primary);
+  --color-secondary-label: var(--p-text-secondary);
+  --color-tertiary-label: var(--p-text-tertiary);
+  --color-separator: var(--p-separator);
+  --color-fill: var(--p-fill-primary);
+  --color-window: var(--p-window-bg);
+  --color-accent: var(--p-control-accent);
 }
 
+/* Fallback for the dev machine: SF Pro only exists on Apple platforms. */
 @font-face {
   font-family: "Inter";
   src: url("/Inter-Medium.ttf") format("truetype");
   font-weight: 500;
   font-display: swap;
+}
+
+/* ------------------------------------------------- Behave like an app */
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+html {
+  background: var(--p-window-bg);
+  color: var(--p-text-primary);
+  /* An app has no default pointer hand and no rubber-banding page. */
+  cursor: default;
+  font-family: var(--p-font);
+  font-size: 13px;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  /* Interface chrome is not selectable; fields and .selectable opt back in. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The window is translucent on macOS: the page must not paint over it. */
+:root[data-platform="mac"],
+:root[data-platform="mac"] body {
+  background: transparent;
+}
+
+input,
+textarea,
+[contenteditable],
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+a,
+img,
+svg {
+  -webkit-user-drag: none;
+}
+
+/* macOS controls never show the link hand. */
+a,
+button,
+label,
+select,
+summary,
+[role="button"] {
+  cursor: default;
+}
+
+/* Window dragging: only the titlebar bands, never the controls inside. */
+[data-drag] {
+  --wails-draggable: drag;
+}
+
+a,
+button,
+input,
+label,
+select,
+textarea,
+[role="button"] {
+  --wails-draggable: no-drag;
 }

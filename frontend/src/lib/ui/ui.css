@@ -1,0 +1,107 @@
+/* Adjustments that turn Puppertino's presentational shells into a real app
+   window. Unlayered, so they win over the `puppertino` layer. */
+
+/* ------------------------------------------------------------ Window */
+
+/* The OS draws the frame, the corners, the shadow and the traffic lights:
+   the shell only fills the webview. */
+.ui-app-window {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  height: 100%;
+  width: 100%;
+  will-change: auto;
+}
+
+.ui-app-window.p-window-inactive {
+  box-shadow: none;
+}
+
+.ui-app-window::after {
+  display: none;
+}
+
+.ui-app-window .p-window-main {
+  background: var(--p-window-bg);
+}
+
+.ui-app-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 24px;
+}
+
+/* No sidebar: the title must clear the native traffic lights on macOS. */
+:root[data-platform="mac"] .ui-app-window:not(:has(.p-sidebar)) .p-window-titlebar-row {
+  padding-left: 84px;
+}
+
+/* ----------------------------------------------------------- Sidebar */
+
+.ui-sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+/* On macOS the window is NSVisualEffectView-backed (Backdrop: translucent):
+   a clear sidebar lets the real desktop vibrancy show, like Finder or Mail. */
+:root[data-platform="mac"] {
+  --p-sidebar-material: transparent;
+  --p-sidebar-material-inactive: transparent;
+}
+
+/* Rows are buttons for keyboard access; drop the button chrome. */
+.ui-sidebar .p-sidebar-row {
+  background-color: transparent;
+  border: 0;
+  font: inherit;
+  text-align: start;
+  width: 100%;
+}
+
+.ui-sidebar .p-sidebar-row.p-selected {
+  background-color: var(--p-sidebar-selected);
+}
+
+.ui-sidebar .p-sidebar-row:not(.p-selected, :disabled):hover {
+  background-color: var(--p-sidebar-hover);
+}
+
+.ui-sidebar .p-sidebar-icon {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+
+.ui-sidebar-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------- Forms */
+
+.ui-form-section + .ui-form-section {
+  margin-top: 20px;
+}
+
+.ui-form-section .p-box-title {
+  margin: 0 0 6px 10px;
+}
+
+.ui-form-footer {
+  margin: 6px 10px 0;
+}
+
+.ui-form-row-button {
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-align: start;
+  width: 100%;
+}

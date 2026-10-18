@@ -57,12 +57,17 @@ func main() {
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: "Mihari",
 		// Window sized to the golden ratio (1000 / 618 ≈ 1.618).
-		Width:  1000,
-		Height: 618,
+		Width:     1000,
+		Height:    618,
+		MinWidth:  720,
+		MinHeight: 480,
 		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 50,
-			Backdrop:                application.MacBackdropTranslucent,
-			TitleBar:                application.MacTitleBarHiddenInset,
+			// Vibrancy behind the sidebar, which the frontend leaves transparent.
+			Backdrop: application.MacBackdropTranslucent,
+			// Traffic lights inset to the middle of the frontend's 52px titlebar band.
+			// Dragging comes from --wails-draggable in that band rather than from
+			// InvisibleTitleBarHeight, which would also swallow clicks on toolbar buttons.
+			TitleBar: application.MacTitleBarHiddenInsetUnified,
 		},
 		BackgroundColour: application.NewRGB(6, 7, 15),
 		URL:              "/",
