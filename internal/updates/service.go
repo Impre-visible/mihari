@@ -37,6 +37,10 @@ const (
 	MethodInPlace Method = "inplace"
 	// The AppImage file Mihari runs from is replaced.
 	MethodAppImage Method = "appimage"
+	// Installed by pacman or apt: the new package is installed through
+	// pkexec, which asks for the user's password.
+	MethodPacman Method = "pacman"
+	MethodApt    Method = "apt"
 	// Installed by a package manager: the release page opens instead.
 	MethodManual Method = "manual"
 )
@@ -74,7 +78,7 @@ func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptio
 	if devmode.Enabled {
 		return nil
 	}
-	p, err := github.New(github.Config{Repository: repository, ChecksumAsset: checksums, AssetMatcher: matchAsset})
+	p, err := github.New(github.Config{Repository: repository, ChecksumAsset: checksums, AssetMatcher: matcherFor(s.info.Method)})
 	if err != nil {
 		return err
 	}
@@ -106,24 +110,33 @@ func method() Method {
 		if os.Getenv("APPIMAGE") != "" {
 			return MethodAppImage
 		}
+		return packageMethod()
 	}
 	return MethodManual
 }
 
-// matchAsset picks the release file for this machine: the zipped app on
-// macOS and Windows, the AppImage on Linux.
-func matchAsset(req updater.CheckRequest, assets []github.ReleaseAsset) int {
-	want := map[string]string{
-		"darwin":  "-darwin-arm64.zip",
-		"windows": "-windows-amd64.zip",
-		"linux":   "-linux-x86_64.appimage",
-	}[req.Platform]
-	for i, a := range assets {
-		if want != "" && strings.HasSuffix(strings.ToLower(a.Name), want) {
-			return i
+// Release files each method installs.
+var assetSuffix = map[Method]string{
+	MethodAppImage: "-linux-x86_64.appimage",
+	MethodPacman:   "-x86_64.pkg.tar.zst",
+	MethodApt:      "_amd64.deb",
+}
+
+// matcherFor picks the release file m installs: the zipped app on macOS and
+// Windows, the AppImage or the package on Linux.
+func matcherFor(m Method) github.AssetMatcher {
+	return func(req updater.CheckRequest, assets []github.ReleaseAsset) int {
+		want := assetSuffix[m]
+		if m == MethodInPlace || m == MethodManual {
+			want = map[string]string{"darwin": "-darwin-arm64.zip", "windows": "-windows-amd64.zip"}[req.Platform]
 		}
+		for i, a := range assets {
+			if want != "" && strings.HasSuffix(strings.ToLower(a.Name), want) {
+				return i
+			}
+		}
+		return -1
 	}
-	return -1
 }
 
 func (s *Service) loop(ctx context.Context) {
@@ -239,8 +252,10 @@ func (s *Service) Install() error {
 			if err = app.Updater.DownloadAndInstall(ctx); err == nil {
 				err = app.Updater.Restart(ctx)
 			}
-		} else {
+		} else if m == MethodAppImage {
 			err = s.replaceAppImage(ctx, rel)
+		} else {
+			err = s.installPackage(ctx, rel, m)
 		}
 		if err != nil {
 			s.mu.Lock()

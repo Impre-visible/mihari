@@ -48,6 +48,13 @@ export enum Method {
     MethodAppImage = "appimage",
 
     /**
+     * Installed by pacman or apt: the new package is installed through
+     * pkexec, which asks for the user's password.
+     */
+    MethodPacman = "pacman",
+    MethodApt = "apt",
+
+    /**
      * Installed by a package manager: the release page opens instead.
      */
     MethodManual = "manual",

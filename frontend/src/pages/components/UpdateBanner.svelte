@@ -12,6 +12,15 @@
   Updates.Status().then((i) => (info = i));
   $effect(() => Events.On("updates:changed", (event) => (info = event.data)));
 
+  // What the update button will do, by how this copy was installed.
+  const NOTES: Record<string, string> = {
+    inplace: "Mihari redémarre après l'installation.",
+    appimage: "L'AppImage est remplacée, puis Mihari redémarre.",
+    pacman: "Ton mot de passe sera demandé pour installer le paquet, puis Mihari redémarre.",
+    apt: "Ton mot de passe sera demandé pour installer le paquet, puis Mihari redémarre.",
+    manual: "La page de téléchargement va s'ouvrir.",
+  };
+
   let shown = $derived(info?.available && info.version !== dismissed);
 </script>
 
@@ -35,9 +44,7 @@
         </span>
       {:else}
         <span class="p-subhead-2 text-secondary-label">
-          Version actuelle {info.current}.{info.method === "manual"
-            ? " Installée par un paquet : la page de téléchargement va s'ouvrir."
-            : " Mihari redémarre après l'installation."}
+          Version actuelle {info.current}. {NOTES[info.method] ?? NOTES.inplace}
         </span>
       {/if}
     </div>
