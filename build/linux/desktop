@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=Mihari
+Comment=Review de code et écriture de tests par LLM local
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/mihari %u
+Terminal=false
+Type=Application
+Icon=mihari
+Categories=Utility;
+StartupWMClass=mihari
+
+ 
