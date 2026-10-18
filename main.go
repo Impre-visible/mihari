@@ -8,6 +8,7 @@ import (
 
 	"github.com/Impre-visible/mihari/internal/gitlab"
 	"github.com/Impre-visible/mihari/internal/settings"
+	"github.com/Impre-visible/mihari/internal/tasks"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -24,6 +25,7 @@ func init() {
 	// This is not required, but the binding generator will pick up registered events
 	// and provide a strongly typed JS/TS API for them.
 	application.RegisterEvent[string]("time")
+	application.RegisterEvent[tasks.Snapshot](tasks.UpdatedEvent)
 }
 
 // main function serves as the application's entry point. It initializes the application, creates a window,
@@ -42,6 +44,7 @@ func main() {
 		Services: []application.Service{
 			application.NewService(&settings.Service{}),
 			application.NewService(&gitlab.Service{}),
+			application.NewService(&tasks.Service{}),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

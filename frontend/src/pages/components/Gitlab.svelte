@@ -2,6 +2,7 @@
   import { CheckCircleIcon, WarningCircleIcon } from "phosphor-svelte";
   import { Service as GitLab } from "../../../bindings/github.com/Impre-visible/mihari/internal/gitlab";
   import { Service as Settings } from "../../../bindings/github.com/Impre-visible/mihari/internal/settings";
+  import { Service as Tasks } from "../../../bindings/github.com/Impre-visible/mihari/internal/tasks";
   import { Button, FormGroup, FormRow, Spinner, TextField } from "$lib/ui";
 
   type Status =
@@ -53,6 +54,7 @@
         await Settings.SetGitLabToken(token);
         token = MASK;
       }
+      Tasks.PollNow();
       status = { kind: "ok", message: "Réglages enregistrés." };
     } catch (err) {
       status = { kind: "error", message: errorMessage(err) };
