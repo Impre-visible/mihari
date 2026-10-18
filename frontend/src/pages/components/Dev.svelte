@@ -9,7 +9,11 @@
     ChatResult,
     Snapshot as EngineSnapshot,
   } from "../../../bindings/github.com/Impre-visible/mihari/internal/scheduler/models";
-  import { Button, Checkbox, FormGroup, FormRow, Spinner, TextArea, TextField } from "$lib/ui";
+  import { Service as Projects } from "../../../bindings/github.com/Impre-visible/mihari/internal/projects";
+  import type { View as ProjectView } from "../../../bindings/github.com/Impre-visible/mihari/internal/projects/models";
+  import { Service as Sandbox } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox";
+  import type { TryResult } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox/models";
+  import { Button, Checkbox, FormGroup, FormRow, Select, Spinner, TextArea, TextField } from "$lib/ui";
 
   type Status =
     | { kind: "idle" }
@@ -63,6 +67,33 @@
       chatStatus = { kind: "idle" };
     } catch (err) {
       chatStatus = { kind: "error", message: errorMessage(err) };
+    }
+  }
+
+  // Environment test
+
+  let projectList = $state<ProjectView[]>([]);
+  let tryProject = $state("");
+  let tryRef = $state("");
+  let tryCommand = $state("ls -la && cat /etc/os-release | head -2");
+  let tryStatus = $state<Status>({ kind: "idle" });
+  let tryResult = $state<TryResult | null>(null);
+
+  Projects.List()
+    .then((overview) => {
+      projectList = (overview.projects ?? []).filter((p) => p.accessible);
+      tryProject = String(projectList[0]?.id ?? "");
+    })
+    .catch((err) => console.error("Load projects:", err));
+
+  async function tryEnvironment() {
+    tryStatus = { kind: "busy", label: "Clone et démarrage du container…" };
+    tryResult = null;
+    try {
+      tryResult = await Sandbox.Try(Number(tryProject), tryRef.trim(), tryCommand);
+      tryStatus = { kind: "idle" };
+    } catch (err) {
+      tryStatus = { kind: "error", message: errorMessage(err) };
     }
   }
 
@@ -206,5 +237,63 @@
       </details>
     {/if}
     <p class="p-form-row p-body py-2.5 whitespace-pre-wrap select-text">{result.text || "(réponse vide)"}</p>
+  </FormGroup>
+{/if}
+
+<form
+  class="mt-8"
+  onsubmit={(e) => {
+    e.preventDefault();
+    tryEnvironment();
+  }}
+>
+  <FormGroup
+    title="Tester l'environnement d'un job"
+    footer="Clone le projet, démarre son container, lance la commande dans /workspace, puis supprime tout."
+  >
+    <FormRow label="Projet" for="dev-try-project">
+      <Select
+        id="dev-try-project"
+        options={projectList.map((p) => ({ value: String(p.id), label: p.path }))}
+        bind:value={tryProject}
+      />
+    </FormRow>
+    <FormRow label="Branche" for="dev-try-ref">
+      <TextField id="dev-try-ref" class="w-72 font-mono" placeholder="Branche par défaut, si vide" bind:value={tryRef} />
+    </FormRow>
+    <div class="p-form-row flex-col items-stretch! py-2.5">
+      <label class="p-form-row-label" for="dev-try-command">Commande</label>
+      <TextArea id="dev-try-command" rows={2} class="w-full resize-y font-mono" bind:value={tryCommand} />
+    </div>
+  </FormGroup>
+
+  <div class="mt-4 flex items-center gap-2">
+    {@render statusLine(tryStatus)}
+    <Button
+      type="submit"
+      variant="primary"
+      disabled={tryProject === "" || tryCommand.trim() === "" || tryStatus.kind === "busy"}
+    >
+      Lancer
+    </Button>
+  </div>
+</form>
+
+{#if tryResult}
+  {@const r = tryResult.result}
+  <FormGroup
+    title="Sortie"
+    class="mt-6"
+    footer="{tryResult.image} · branche {tryResult.branch} · préparation {(tryResult.setupMs / 1000).toFixed(1)} s · commande {(r.durationMs / 1000).toFixed(1)} s · code {r.exitCode}{r.timedOut ? ' · délai dépassé' : ''}{r.truncated ? ' · sortie tronquée' : ''}"
+  >
+    {#if r.stdout}
+      <pre class="p-form-row p-subhead-2 overflow-x-auto py-2.5 font-mono whitespace-pre select-text">{r.stdout}</pre>
+    {/if}
+    {#if r.stderr}
+      <pre class="p-form-row p-subhead-2 overflow-x-auto py-2.5 font-mono whitespace-pre text-(--p-sys-red) select-text">{r.stderr}</pre>
+    {/if}
+    {#if !r.stdout && !r.stderr}
+      <p class="p-form-row p-subhead-2 py-2.5 text-tertiary-label">Aucune sortie.</p>
+    {/if}
   </FormGroup>
 {/if}

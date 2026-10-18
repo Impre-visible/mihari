@@ -6,6 +6,8 @@
   import type { Todo } from "../../../bindings/github.com/Impre-visible/mihari/internal/gitlab/models";
   import { Service as Scheduler } from "../../../bindings/github.com/Impre-visible/mihari/internal/scheduler";
   import type { Snapshot as EngineSnapshot } from "../../../bindings/github.com/Impre-visible/mihari/internal/scheduler/models";
+  import { Service as Sandbox } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox";
+  import type { Info as SandboxInfo } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox/models";
   import { Button, FormGroup, FormRow, Spinner } from "$lib/ui";
 
   const ACTIONS: Record<string, string> = {
@@ -17,6 +19,15 @@
 
   let snapshot = $state<Snapshot | null>(null);
   let engine = $state<EngineSnapshot | null>(null);
+  let sandbox = $state<SandboxInfo | null>(null);
+
+  function checkSandbox() {
+    sandbox = null;
+    Sandbox.Info()
+      .then((info) => (sandbox = info))
+      .catch((err) => console.error("Sandbox info:", err));
+  }
+  checkSandbox();
   let now = $state(Date.now());
 
   // Go's zero time.Time means no poll has finished yet.
@@ -78,6 +89,28 @@
     {#if engine.state === "error"}
       <p class="p-form-row p-subhead-2 py-2.5 text-label select-text">{engine.error}</p>
     {/if}
+  {/if}
+</FormGroup>
+
+<FormGroup title="Containers" class="mt-6">
+  <div class="p-form-row gap-1.5">
+    <span class="p-form-row-label">{sandbox?.label ?? "Runtime"}</span>
+    {#if !sandbox}
+      <Spinner small label="Vérification" />
+      <span class="text-secondary-label">Vérification…</span>
+    {:else if sandbox.ready}
+      <CheckCircleIcon size={16} weight="fill" class="shrink-0 text-(--p-sys-green)" aria-hidden="true" />
+      <span class="text-secondary-label">Prêt</span>
+    {:else}
+      <WarningCircleIcon size={16} weight="fill" class="shrink-0 text-(--p-sys-red)" aria-hidden="true" />
+      <span class="text-secondary-label">Indisponible</span>
+      <Button size="small" onclick={checkSandbox}>Revérifier</Button>
+    {/if}
+  </div>
+  {#if sandbox && !sandbox.ready}
+    <p class="p-form-row p-subhead-2 py-2.5 text-label select-text">
+      {sandbox.error}{sandbox.installed ? "" : ` ${sandbox.install}`}
+    </p>
   {/if}
 </FormGroup>
 

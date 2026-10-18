@@ -9,6 +9,7 @@ import (
 	"github.com/Impre-visible/mihari/internal/engine"
 	"github.com/Impre-visible/mihari/internal/gitlab"
 	"github.com/Impre-visible/mihari/internal/projects"
+	"github.com/Impre-visible/mihari/internal/sandbox"
 	"github.com/Impre-visible/mihari/internal/scheduler"
 	"github.com/Impre-visible/mihari/internal/settings"
 	"github.com/Impre-visible/mihari/internal/tasks"
@@ -50,6 +51,7 @@ func main() {
 			application.NewService(&settings.Service{}),
 			application.NewService(&gitlab.Service{}),
 			application.NewService(&projects.Service{}),
+			application.NewService(&sandbox.Service{}),
 			application.NewService(&tasks.Service{}),
 			application.NewService(&scheduler.Service{}),
 			application.NewService(&engine.Service{}),
