@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -94,7 +96,10 @@ func pickGGUF(names []string, quant string) ([]string, error) {
 	var ggufs []string
 	for _, n := range names {
 		lower := strings.ToLower(n)
-		if strings.HasSuffix(lower, ".gguf") && !strings.Contains(lower, "mmproj") {
+		// Vision projectors and multi-token-prediction drafts ride along with
+		// the weights but are not the model.
+		if strings.HasSuffix(lower, ".gguf") && !strings.Contains(lower, "mmproj") &&
+			!strings.HasPrefix(path.Base(lower), "mtp-") && !strings.Contains(lower, "mtp/") {
 			ggufs = append(ggufs, n)
 		}
 	}
@@ -103,10 +108,15 @@ func pickGGUF(names []string, quant string) ([]string, error) {
 		return nil, errNoGGUF
 	}
 
+	// A quant is a whole token of the name: Q6_K must not pick Q6_K_L.
 	matching := func(q string) []string {
+		if q == "" {
+			return ggufs
+		}
+		token := regexp.MustCompile(`(?i)(^|[-_./])` + regexp.QuoteMeta(q) + `([-_.]|$)`)
 		var out []string
 		for _, n := range ggufs {
-			if strings.Contains(strings.ToUpper(filepath.Base(n)), strings.ToUpper(q)) {
+			if token.MatchString(n) {
 				out = append(out, n)
 			}
 		}
@@ -366,4 +376,45 @@ func downloadFile(ctx context.Context, url, dest string, progress func(int64)) e
 		return err
 	}
 	return os.Rename(part, dest)
+}
+
+// RemoteSize returns how many bytes downloading model for kind would take,
+// read from Hugging Face without downloading anything.
+func RemoteSize(ctx context.Context, kind Kind, model string) (int64, error) {
+	ref, err := parseHFRef(model)
+	if err != nil {
+		return 0, err
+	}
+	files, err := hfList(ctx, ref.Repo)
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	switch kind {
+	case LlamaServer:
+		names := make([]string, len(files))
+		for i, f := range files {
+			names[i] = f.Path
+		}
+		parts, err := pickGGUF(names, ref.Quant)
+		if err != nil {
+			return 0, err
+		}
+		for _, f := range files {
+			if slices.Contains(parts, f.Path) {
+				total += f.Size
+			}
+		}
+	default:
+		// MLX weights; the rest of the repository is small.
+		for _, f := range files {
+			if strings.HasSuffix(f.Path, ".safetensors") {
+				total += f.Size
+			}
+		}
+	}
+	if total == 0 {
+		return 0, errors.New("aucun fichier de poids trouvé")
+	}
+	return total, nil
 }

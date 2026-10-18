@@ -1,0 +1,184 @@
+# Builds Mihari for macOS (Apple Silicon), Linux and Windows on each v* tag,
+# and publishes the installers in a GitHub Release.
+#
+# macOS signing and notarization run only when these secrets exist; without
+# them the .dmg is ad-hoc signed and Gatekeeper warns on first open:
+#   MACOS_CERTIFICATE           base64 of the Developer ID Application .p12
+#   MACOS_CERTIFICATE_PASSWORD  its password
+#   MACOS_SIGNING_IDENTITY      e.g. "Developer ID Application: Name (TEAMID)"
+#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD  for notarytool
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, without the v (e.g. 0.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  # Keep in step with go.mod.
+  WAILS_VERSION: v3.0.0-beta.31
+  NODE_VERSION: "22"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: darwin
+          - os: ubuntu-24.04
+            platform: linux
+          - os: windows-2025
+            platform: windows
+    runs-on: ${{ matrix.os }}
+    env:
+      # Secrets cannot appear in a step's if; these flags can.
+      HAS_MACOS_CERT: ${{ secrets.MACOS_CERTIFICATE != '' }}
+      HAS_NOTARY: ${{ secrets.APPLE_ID != '' }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: version
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then VERSION="${GITHUB_REF_NAME#v}"; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # The templates carry 0.1.0 as a literal; perl -pi behaves the same on every runner.
+          perl -pi -e "s/0\.1\.0/$VERSION/g" \
+            build/linux/nfpm/nfpm.yaml build/darwin/Info.plist \
+            build/windows/info.json build/windows/nsis/wails_tools.nsh
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Wails CLI and Task
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS_VERSION }}
+          go install github.com/go-task/task/v3/cmd/task@latest
+
+      - name: Linux build dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libfuse2
+
+      # ---- macOS ----
+
+      - name: macOS app bundle
+        if: matrix.platform == 'darwin'
+        run: task darwin:package ARCH=arm64
+
+      - name: macOS Developer ID signing
+        if: matrix.platform == 'darwin' && env.HAS_MACOS_CERT == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p ci "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p ci "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN"
+          # Hardened runtime is required for notarization.
+          codesign --force --deep --options runtime --timestamp --sign "$MACOS_SIGNING_IDENTITY" bin/mihari.app
+          codesign --verify --deep --strict bin/mihari.app
+
+      - name: macOS disk image
+        if: matrix.platform == 'darwin'
+        run: task darwin:create:dmg
+
+      - name: macOS notarization
+        if: matrix.platform == 'darwin' && env.HAS_MACOS_CERT == 'true' && env.HAS_NOTARY == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: |
+          DMG=$(ls bin/*.dmg | head -1)
+          codesign --force --timestamp --sign "$MACOS_SIGNING_IDENTITY" "$DMG"
+          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "$DMG"
+
+      # ---- Linux ----
+
+      - name: Linux packages
+        if: matrix.platform == 'linux'
+        env:
+          # The AppImage tooling is itself an AppImage; this spares it FUSE on the runner.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          GIT_COMMITTER_NAME: Mihari
+          GIT_COMMITTER_EMAIL: noreply@github.com
+        run: |
+          task linux:create:appimage
+          task linux:create:deb
+          task linux:create:aur
+
+      # ---- Windows ----
+
+      - name: Windows installer
+        if: matrix.platform == 'windows'
+        run: |
+          command -v makensis || choco install nsis -y
+          export PATH="$PATH:/c/Program Files (x86)/NSIS"
+          task windows:package
+
+      - name: Collect installers
+        run: |
+          mkdir -p dist
+          V="${{ steps.version.outputs.version }}"
+          case "${{ matrix.platform }}" in
+            darwin)  cp bin/*.dmg "dist/Mihari-$V-macos-arm64.dmg" ;;
+            linux)
+              cp bin/*.AppImage "dist/Mihari-$V-linux-x86_64.AppImage"
+              cp bin/*.deb "dist/mihari_${V}_amd64.deb"
+              cp bin/*.pkg.tar.zst "dist/mihari-$V-x86_64.pkg.tar.zst" ;;
+            windows) cp bin/*installer*.exe "dist/Mihari-$V-windows-amd64-setup.exe" ;;
+          esac
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mihari-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref_name }}
+          name: Mihari ${{ github.event.inputs.version || github.ref_name }}
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          generate_release_notes: true
+          files: dist/*

@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/Impre-visible/mihari/internal/advisor"
 	"github.com/Impre-visible/mihari/internal/engine"
 	"github.com/Impre-visible/mihari/internal/gitlab"
 	"github.com/Impre-visible/mihari/internal/jobs"
@@ -64,6 +65,7 @@ func main() {
 			application.NewService(&sandbox.Service{}),
 			application.NewService(schedulerService),
 			application.NewService(&engine.Service{}),
+			application.NewService(&advisor.Service{Reload: schedulerService.Reload}),
 			application.NewService(jobsService),
 			application.NewService(tasksService),
 		},
