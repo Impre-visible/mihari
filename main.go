@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/Impre-visible/mihari/internal/gitlab"
 	"github.com/Impre-visible/mihari/internal/settings"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -40,6 +41,7 @@ func main() {
 		Description: "To be determined",
 		Services: []application.Service{
 			application.NewService(&settings.Service{}),
+			application.NewService(&gitlab.Service{}),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

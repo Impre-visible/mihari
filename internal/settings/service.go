@@ -108,12 +108,18 @@ func (s *Service) Set(field string, value interface{}) error {
 	return nil
 }
 
-func (s *Service) HasGitLabToken() (bool, error) {
+// GitLabToken returns the token stored in the keyring, or "" when none is.
+func GitLabToken() (string, error) {
 	value, err := keyring.Get("mihari", "gitlab_token")
+	if errors.Is(err, keyring.ErrNotFound) {
+		return "", nil
+	}
+	return value, err
+}
+
+func (s *Service) HasGitLabToken() (bool, error) {
+	value, err := GitLabToken()
 	if err != nil {
-		if errors.Is(err, keyring.ErrNotFound) {
-			return false, nil
-		}
 		return false, err
 	}
 	return value != "", nil
