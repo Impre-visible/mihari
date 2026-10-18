@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/Impre-visible/mihari/internal/settings"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -36,9 +37,9 @@ func main() {
 	// 'Mac' options tailor the application when running an macOS.
 	app := application.New(application.Options{
 		Name:        "mihari",
-		Description: "A demo of using raw HTML & CSS",
+		Description: "To be determined",
 		Services: []application.Service{
-			application.NewService(&GreetService{}),
+			application.NewService(&settings.Service{}),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
