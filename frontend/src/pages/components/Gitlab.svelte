@@ -79,7 +79,6 @@
 >
   <FormGroup
     title="Connexion"
-    footer="Le token est rangé dans le trousseau du système, jamais dans le fichier de configuration. Il lui faut le scope api."
   >
     <FormRow label="URL de l'instance" for="gitlab-url">
       <TextField id="gitlab-url" type="url" class="w-72" placeholder="https://gitlab.example.com" bind:value={url} />

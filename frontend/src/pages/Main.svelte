@@ -11,9 +11,9 @@
 
   const sections: Section[] = [
     { id: "status", label: "État", icon: GaugeIcon, component: Status },
+    { id: "gitlab", label: "GitLab", icon: GitlabLogoIcon, component: Gitlab },
     { id: "profiles", label: "Profils", icon: CpuIcon, component: Profiles },
     { id: "schedule", label: "Planning", icon: ClockIcon, component: Schedule },
-    { id: "gitlab", label: "GitLab", icon: GitlabLogoIcon, component: Gitlab },
   ];
 
   let activeId = $state(sections[0].id);
