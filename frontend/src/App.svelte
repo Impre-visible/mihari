@@ -1,106 +1,64 @@
 <script lang="ts">
-  import {onMount} from 'svelte';
-  import {Events, WML} from "@wailsio/runtime";
-  import {GreetService} from "../bindings/github.com/Impre-visible/mihari";
+  const mihariVersion = "v1.0.0";
 
-  const wailsVersion = "v3.0.0-beta.31";
-
-  let name: string = $state('');
-  let time: string = $state('Listening for Time event...');
-
-  let titleNameEl: HTMLElement;
-  let toastEl: HTMLElement;
-  let resultEl: HTMLElement;
-  let toastTimer: ReturnType<typeof setTimeout>;
-
-  onMount(() => {
-    Events.On('time', (v: any) => {
-      // On a narrow screen the full RFC1123 stamp is too wide for the footer, so
-      // show just the clock time there (matching the CSS breakpoint).
-      const full = v.data;
-      const compact = (full.match(/\d{1,2}:\d{2}:\d{2}/) || [full])[0];
-      time = window.matchMedia('(max-width: 640px)').matches ? compact : full;
-    });
-    // Wire up data-wml-openURL links (logos + footer "Docs" link).
-    WML.Reload();
-  });
-
-  // Crossfade the framework word in the heading ("Wails + Svelte") to the name
-  // the user entered ("Wails + <name>"): the old word fades out while the new one
-  // fades in over the same spot.
-  function swapTitleName(name: string): void {
-    const current = titleNameEl.querySelector('.title-name-text:not(.is-outgoing)');
-    if (!current || current.textContent === name) {
-      return;
-    }
-    const incoming = document.createElement('span');
-    incoming.className = 'title-name-text is-entering';
-    incoming.textContent = name;
-    current.classList.add('is-outgoing');
-    titleNameEl.appendChild(incoming);
-    // Force a reflow so the transitions run from the starting state.
-    void incoming.offsetWidth;
-    incoming.classList.remove('is-entering');
-    current.classList.add('is-leaving');
-    current.addEventListener('transitionend', () => current.remove(), {once: true});
-  }
-
-  // Pop the toast with the message Go returned, then auto-dismiss it.
-  function showToast(message: string): void {
-    resultEl.innerText = message;
-    toastEl.classList.add('is-visible');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toastEl.classList.remove('is-visible'), 4000);
-  }
-
-  const doGreet = (): void => {
-    let n = name || 'anonymous';
-    swapTitleName(n);
-    GreetService.Greet(n).then(showToast).catch(console.error);
-  }
+  const steps = [
+    {
+      title: "Profils de modèles",
+      description: "Un modèle de journée, un modèle de nuit et le nombre de jobs en parallèle.",
+    },
+    {
+      title: "Planning",
+      description: "Les plages horaires et le profil actif sur chacune.",
+    },
+    {
+      title: "Connexion GitLab",
+      description: "L'URL de l'instance, le compte bot et son token, rangé dans le trousseau.",
+    },
+  ];
 </script>
 
-<main class="container">
-  <header class="brand">
-    <span class="brand-mark" data-wml-openURL="https://v3.wails.io">
-      <img src="/wails.png" class="brand-logo" alt="Wails logo"/>
-    </span>
-    <span class="brand-badge" data-wml-openURL="https://svelte.dev">
-      <img src="/svelte.svg" alt="Svelte logo"/>
-    </span>
-  </header>
+<div class="flex min-h-screen flex-col bg-ink text-text antialiased">
+  <!-- Halo décoratif derrière le titre. -->
+  <div
+    aria-hidden="true"
+    class="pointer-events-none fixed -top-40 left-1/2 h-96 w-[40rem] -translate-x-1/2 rounded-full bg-gradient-to-br from-accent to-accent-2 opacity-15 blur-3xl"
+  ></div>
 
-  <h1 class="title"><span class="title-accent">Wails +</span> <span class="title-name" bind:this={titleNameEl}><span class="title-name-text">Svelte</span></span></h1>
-  <p class="subtitle">Build beautiful cross-platform apps with Go and Svelte.</p>
+  <main class="relative mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center px-8 py-16">
+    <h1 class="text-5xl font-medium tracking-tight text-balance">
+      Bienvenue sur
+      <span class="bg-gradient-to-br from-accent to-accent-2 bg-clip-text text-transparent">Mihari</span>
+    </h1>
 
-  <div class="greet">
-    <div class="input-box">
-      <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      <input aria-label="input" class="input" bind:value={name} type="text" placeholder="Your name" autocomplete="off"/>
-      <button aria-label="greet-btn" class="btn" onclick={doGreet}>Greet
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-      </button>
-    </div>
-  </div>
-</main>
+    <p class="mt-4 max-w-xl text-lg text-pretty text-muted">
+      Des LLM locaux qui relisent vos merge requests GitLab le jour et écrivent des tests la nuit.
+      Le code ne quitte jamais la machine.
+    </p>
 
-<hr class="footer-divider"/>
-<footer class="footer">
-  <span class="footer-version">{wailsVersion}</span>
-  <span class="footer-time">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-    <span>{time}</span>
-  </span>
-  <a class="footer-docs" data-wml-openURL="https://v3.wails.io" aria-label="Wails documentation">Docs
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
-  </a>
-</footer>
+    <section class="mt-12">
+      <h2 class="mb-4 text-xs font-medium tracking-widest text-muted uppercase">Pour commencer</h2>
 
-<div class="toast" bind:this={toastEl} role="status" aria-live="polite">
-  <span class="toast-label">From Go</span>
-  <span aria-label="result" class="toast-msg" bind:this={resultEl}></span>
+      <ol class="grid gap-4 sm:grid-cols-3">
+        {#each steps as step, i}
+          <li class="rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+            <span
+              class="mb-4 flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-sm font-medium"
+            >
+              {i + 1}
+            </span>
+            <h3 class="font-medium">{step.title}</h3>
+            <p class="mt-1 text-sm text-pretty text-muted">{step.description}</p>
+          </li>
+        {/each}
+      </ol>
+    </section>
+  </main>
+
+  <footer
+    class="relative flex items-center justify-between border-t border-white/10 px-8 py-4 text-xs text-muted"
+  >
+    <span class="tabular-nums">{mihariVersion}</span>
+    <span>Mihari <span aria-hidden="true">©</span></span>
+    <span>Made with ❤️</span>
+  </footer>
 </div>
-
-<style>
-  /* Put your standard CSS here */
-</style>
