@@ -180,7 +180,11 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 				if err == nil {
 					s.mu.Lock()
 					j.OpenedMR = mr.WebURL
+					summary := j.Summary
 					s.mu.Unlock()
+					if s.OnMROpened != nil {
+						s.OnMROpened(summary)
+					}
 				}
 				return mr, err
 			}

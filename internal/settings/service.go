@@ -128,3 +128,24 @@ func (s *Service) HasGitLabToken() (bool, error) {
 func (s *Service) SetGitLabToken(token string) error {
 	return keyring.Set("mihari", "gitlab_token", token)
 }
+
+// Secret returns a value kept in the system keyring, or "" when none is.
+func Secret(name string) (string, error) {
+	value, err := keyring.Get("mihari", name)
+	if errors.Is(err, keyring.ErrNotFound) {
+		return "", nil
+	}
+	return value, err
+}
+
+// SetSecret keeps value in the system keyring; "" removes it.
+func SetSecret(name, value string) error {
+	if value == "" {
+		err := keyring.Delete("mihari", name)
+		if errors.Is(err, keyring.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	return keyring.Set("mihari", name, value)
+}

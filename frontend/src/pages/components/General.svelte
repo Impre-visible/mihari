@@ -3,7 +3,9 @@
   import { Events } from "@wailsio/runtime";
   import { Service as Updates } from "../../../bindings/github.com/Impre-visible/mihari/internal/updates";
   import type { Info } from "../../../bindings/github.com/Impre-visible/mihari/internal/updates/models";
-  import { Button, FormGroup, FormRow, Switch } from "$lib/ui";
+  import { CheckCircleIcon, WarningCircleIcon } from "phosphor-svelte";
+  import { Service as Discord } from "../../../bindings/github.com/Impre-visible/mihari/internal/discord";
+  import { Button, FormGroup, FormRow, Spinner, Switch, TextField } from "$lib/ui";
   import { nav } from "$lib/nav.svelte";
 
   let autostart = $state(true);
@@ -28,6 +30,60 @@
     const at = new Date(i.checkedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
     return i.available ? `Version ${i.version} disponible (vérifié le ${at}).` : `À jour (vérifié le ${at}).`;
   }
+
+  // Discord
+
+  type Status =
+    | { kind: "idle" }
+    | { kind: "busy"; label: string }
+    | { kind: "ok"; message: string }
+    | { kind: "error"; message: string };
+
+  // Shown in place of the saved webhook, which never leaves the keyring.
+  const MASK = "*".repeat(32);
+  let webhook = $state("");
+  let discordStatus = $state<Status>({ kind: "idle" });
+
+  Discord.Configured().then((configured) => {
+    if (configured) webhook = MASK;
+  });
+
+  function messageOf(err: unknown) {
+    return err instanceof Error ? err.message : String(err);
+  }
+
+  async function discordAction(label: string, run: () => Promise<void>, done: string) {
+    discordStatus = { kind: "busy", label };
+    try {
+      await run();
+      discordStatus = { kind: "ok", message: done };
+    } catch (err) {
+      discordStatus = { kind: "error", message: messageOf(err) };
+    }
+  }
+
+  const testDiscord = () =>
+    discordAction("Envoi d'un message de test…", () => Discord.Test(webhook === MASK ? "" : webhook), "Message envoyé, regarde le salon.");
+
+  const saveDiscord = () =>
+    discordAction(
+      "Enregistrement…",
+      async () => {
+        await Discord.SetWebhook(webhook);
+        webhook = MASK;
+      },
+      "Webhook enregistré.",
+    );
+
+  const removeDiscord = () =>
+    discordAction(
+      "Suppression…",
+      async () => {
+        await Discord.SetWebhook("");
+        webhook = "";
+      },
+      "Notifications Discord désactivées.",
+    );
 
   async function toggle() {
     error = null;
@@ -70,3 +126,45 @@
     <Button size="small" onclick={() => (nav.wizard = true)}>Relancer</Button>
   </FormRow>
 </FormGroup>
+
+<FormGroup
+  title="Discord"
+  footer="Envoie dans un salon les jobs en échec, les erreurs du moteur, les MR ouvertes par le bot et le résumé de fin de nuit. L'URL est rangée dans le trousseau du système."
+>
+  <FormRow label="Webhook" for="general-discord">
+    <TextField
+      id="general-discord"
+      type="password"
+      class="w-72"
+      placeholder="https://discord.com/api/webhooks/…"
+      bind:value={webhook}
+      oninput={() => discordStatus.kind !== "busy" && (discordStatus = { kind: "idle" })}
+    />
+  </FormRow>
+</FormGroup>
+
+<div class="mt-4 flex items-center gap-2">
+  <p class="p-subhead-2 flex min-w-0 flex-1 items-center gap-1.5" role="status">
+    {#if discordStatus.kind === "busy"}
+      <Spinner small label={discordStatus.label} />
+      <span class="text-secondary-label">{discordStatus.label}</span>
+    {:else if discordStatus.kind === "ok"}
+      <CheckCircleIcon size={16} weight="fill" class="shrink-0 text-(--p-sys-green)" aria-hidden="true" />
+      <span class="text-secondary-label">{discordStatus.message}</span>
+    {:else if discordStatus.kind === "error"}
+      <WarningCircleIcon size={16} weight="fill" class="shrink-0 text-(--p-sys-red)" aria-hidden="true" />
+      <span class="text-label select-text">{discordStatus.message}</span>
+    {/if}
+  </p>
+  {#if webhook === MASK}
+    <Button variant="borderless" disabled={discordStatus.kind === "busy"} onclick={removeDiscord}>Retirer</Button>
+  {/if}
+  <Button disabled={webhook === "" || discordStatus.kind === "busy"} onclick={testDiscord}>Tester</Button>
+  <Button
+    variant="primary"
+    disabled={webhook === "" || webhook === MASK || discordStatus.kind === "busy"}
+    onclick={saveDiscord}
+  >
+    Enregistrer
+  </Button>
+</div>

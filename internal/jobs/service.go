@@ -127,6 +127,8 @@ type Service struct {
 	OnPeriodEnd func(PeriodSummary)
 	// Called with every job's Summary whenever one changes.
 	OnChange func([]Summary)
+	// Called when the agent opens a merge request, with its URL in Summary.OpenedMR.
+	OnMROpened func(Summary)
 
 	mu     sync.Mutex
 	jobs   []*job
@@ -151,6 +153,8 @@ type PeriodSummary struct {
 	Failed    int
 	// Issues still running when the period ended; they finish on their own.
 	Running int
+	// Merge requests the period opened, to review.
+	MRs []string
 }
 
 func (s *Service) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
@@ -467,6 +471,9 @@ func (s *Service) trackPeriod(kind agent.Kind, active scheduler.Active) (PeriodS
 			continue
 		}
 		sum.Profile = j.Profile
+		if j.OpenedMR != "" {
+			sum.MRs = append(sum.MRs, j.OpenedMR)
+		}
 		switch j.State {
 		case StateSucceeded:
 			sum.Succeeded++

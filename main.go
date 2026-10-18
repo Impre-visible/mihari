@@ -10,6 +10,7 @@ import (
 
 	"github.com/Impre-visible/mihari/internal/advisor"
 	"github.com/Impre-visible/mihari/internal/desktop"
+	"github.com/Impre-visible/mihari/internal/discord"
 	"github.com/Impre-visible/mihari/internal/engine"
 	"github.com/Impre-visible/mihari/internal/gitlab"
 	"github.com/Impre-visible/mihari/internal/jobs"
@@ -57,8 +58,17 @@ func main() {
 	tasksService.OnReady = jobsService.Offer
 
 	desktopService := desktop.New()
-	jobsService.OnFinished = desktopService.JobFinished
-	jobsService.OnPeriodEnd = desktopService.PeriodEnded
+	discordService := &discord.Notifier{}
+	// Important events go to the desktop and, when a webhook is set, to Discord.
+	jobsService.OnFinished = func(j jobs.Summary) {
+		desktopService.JobFinished(j)
+		discordService.JobFinished(j)
+	}
+	jobsService.OnPeriodEnd = func(p jobs.PeriodSummary) {
+		desktopService.PeriodEnded(p)
+		discordService.PeriodEnded(p)
+	}
+	jobsService.OnMROpened = discordService.MROpened
 	jobsService.OnChange = func(list []jobs.Summary) {
 		running := 0
 		for _, j := range list {
@@ -68,7 +78,10 @@ func main() {
 		}
 		desktopService.SetRunning(running)
 	}
-	schedulerService.OnError = desktopService.EngineFailed
+	schedulerService.OnError = func(s scheduler.Snapshot) {
+		desktopService.EngineFailed(s)
+		discordService.EngineFailed(s)
+	}
 
 	// Create a new Wails application by providing the necessary options.
 	// Variables 'Name' and 'Description' are for application metadata.
@@ -91,6 +104,7 @@ func main() {
 			application.NewService(desktopService.Service()),
 			application.NewService(desktopService.Notifier()),
 			application.NewService(&updates.Service{}),
+			application.NewService(discordService.Service()),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
