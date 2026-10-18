@@ -12,6 +12,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as gitlab$0 from "../gitlab/models.js";
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
 /**
@@ -20,6 +24,21 @@ import * as $models from "./models.js";
  */
 export function PollNow(): $CancellablePromise<void> {
     return $Call.ByID(2424371160);
+}
+
+/**
+ * RemoveSimulated drops a simulated todo; GitLab todos are left alone.
+ */
+export function RemoveSimulated(id: number): $CancellablePromise<void> {
+    return $Call.ByID(1512633089, id);
+}
+
+/**
+ * Simulate queues the todo author mentioning the bot with body on the merge
+ * request at mrURL would create, for testing without pinging on GitLab.
+ */
+export function Simulate(mrURL: string, author: string, body: string): $CancellablePromise<gitlab$0.Todo> {
+    return $Call.ByID(1877247671, mrURL, author, body);
 }
 
 /**

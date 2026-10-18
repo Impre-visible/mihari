@@ -11,5 +11,6 @@ export {
 } from "./models.js";
 
 export type {
+    ChatResult,
     Snapshot
 } from "./models.js";

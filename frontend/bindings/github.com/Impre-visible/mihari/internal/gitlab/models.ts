@@ -18,4 +18,14 @@ export interface Todo {
     "url": string;
     "author": string;
     "createdAt": string;
+
+    /**
+     * Text of the comment that mentioned the bot; empty for a review request.
+     */
+    "body": string;
+
+    /**
+     * Made on the Dev page rather than read from GitLab, so never marked done there.
+     */
+    "simulated": boolean;
 }

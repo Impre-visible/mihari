@@ -103,7 +103,7 @@
   {#each todos as todo (todo.id)}
     <FormRow
       label={todo.title}
-      detail="{todo.project}!{todo.mrIid} · {ACTIONS[todo.action] ?? todo.action}"
+      detail="{todo.project}!{todo.mrIid} · {ACTIONS[todo.action] ?? todo.action}{todo.simulated ? ' · simulée' : ''}"
       chevron
       onclick={() => Browser.OpenURL(todo.url)}
     />

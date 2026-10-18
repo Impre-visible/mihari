@@ -83,6 +83,8 @@ func get(ctx context.Context, base *url.URL, token, path string, query url.Value
 	switch {
 	case res.StatusCode == http.StatusUnauthorized:
 		return fmt.Errorf("token refusé par l'instance")
+	case res.StatusCode == http.StatusNotFound:
+		return fmt.Errorf("introuvable sur l'instance, ou le bot n'y a pas accès")
 	case res.StatusCode != http.StatusOK:
 		return fmt.Errorf("réponse inattendue de l'instance : %s", res.Status)
 	}

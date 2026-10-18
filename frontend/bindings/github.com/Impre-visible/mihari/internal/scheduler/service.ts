@@ -19,6 +19,14 @@ import * as engine$0 from "../engine/models.js";
 import * as $models from "./models.js";
 
 /**
+ * Chat sends message to the running engine, optionally behind the active
+ * profile's prompt as the system message, to check the model answers.
+ */
+export function Chat(message: string, withProfilePrompt: boolean): $CancellablePromise<$models.ChatResult> {
+    return $Call.ByID(3863696562, message, withProfilePrompt);
+}
+
+/**
  * Engines lists the inference engines and whether each is installed.
  */
 export function Engines(): $CancellablePromise<engine$0.Info[] | null> {
