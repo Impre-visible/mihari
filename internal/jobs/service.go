@@ -137,6 +137,9 @@ type Service struct {
 	ctx   context.Context
 	// Runs a started job; tests replace it.
 	start func(ctx context.Context, j *job, active scheduler.Active)
+	// Tests replace how commands find the bot's name and answer.
+	bot   func(projectID int) string
+	reply func(t gitlab.Todo, body string)
 	// When the current issues period began; zero outside one.
 	periodStart time.Time
 }
@@ -265,6 +268,12 @@ func (s *Service) Offer(todos []gitlab.Todo) {
 	s.mu.Unlock()
 
 	for _, t := range fresh {
+		s.mu.Lock()
+		s.known[t.ID] = true
+		s.mu.Unlock()
+		if s.command(t) {
+			continue
+		}
 		// A mention in the thread of a running job is part of that job: its
 		// watcher passes the comment on, and the todo is closed with the job.
 		if j := s.runningThreadFor(t); j != nil {

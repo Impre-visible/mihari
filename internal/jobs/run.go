@@ -290,6 +290,10 @@ func (s *Service) watchComments(ctx context.Context, j *job, env *agent.Env, inb
 				if seen || n.Author == env.GitLab.Bot {
 					continue
 				}
+				// A command is for Mihari, not the agent: it arrives as its own todo.
+				if _, isCommand := parseCommand(n.Body, env.GitLab.Bot); isCommand {
+					continue
+				}
 				if members == nil {
 					if members, err = gitlab.ProjectMembers(ctx, j.ProjectID); err != nil {
 						continue
