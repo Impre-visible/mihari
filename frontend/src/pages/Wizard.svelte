@@ -2,8 +2,8 @@
   import type { Component } from "svelte";
   import { CheckIcon } from "phosphor-svelte";
   import { AppWindow, Button } from "$lib/ui";
-  import Gitlab from "./components/Gitlab.svelte";
-  import Projects from "./components/Projects.svelte";
+  import Connection from "./gitlab/Connection.svelte";
+  import GitLabPage from "./gitlab/GitLab.svelte";
   import Agent from "./agent/Agent.svelte";
   import Machine from "./agent/MachineInspector.svelte";
 
@@ -17,13 +17,14 @@
   const steps: Step[] = [
     {
       title: "Connecte GitLab",
-      hint: "Teste la connexion, puis enregistre.",
-      component: Gitlab,
+      hint: "Renseigne l'instance et le compte du bot, puis Connecter.",
+      component: Connection,
     },
     {
       title: "Choisis les projets",
-      hint: "Allume ceux où le bot peut travailler, puis enregistre.",
-      component: Projects,
+      hint: "Allume ceux où le bot peut travailler. Tout s'enregistre seul.",
+      component: GitLabPage,
+      framed: true,
     },
     {
       title: "Choisis un modèle",
