@@ -102,8 +102,10 @@ type job struct {
 	// Built once the repository is cloned, since .mihari.md comes from it.
 	systemPrompt string
 	taskPrompt   string
-	// The 👀 award, removed when the job ends.
-	awardID int
+	// The 👀 award, removed when the job ends, and the comment it is on (0
+	// for the merge request or issue itself).
+	awardID   int
+	awardNote int
 }
 
 func (j *job) key() string {

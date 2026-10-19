@@ -86,7 +86,15 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 			return env, cleanup, fmt.Errorf("pose du label %s : %w", LabelDoing, err)
 		}
 	} else if !j.dry {
-		if id, err := client.React(ctx, target, "eyes"); err == nil {
+		// On the comment that pinged the bot, where its author looks; on the
+		// merge request or issue for a review request.
+		j.awardNote = j.todo.NoteID
+		id, err := client.React(ctx, target, j.awardNote, "eyes")
+		if err != nil && j.awardNote != 0 {
+			j.awardNote = 0
+			id, err = client.React(ctx, target, 0, "eyes")
+		}
+		if err == nil {
 			j.awardID = id
 		} else {
 			s.emit(j, "info", "GitLab", "Impossible d'ajouter 👀 : "+err.Error())
@@ -408,13 +416,13 @@ func (s *Service) finishPing(ctx context.Context, j *job, env *agent.Env, state 
 		s.post(ctx, env, msg)
 	}
 	if j.awardID != 0 {
-		_ = env.GitLab.Unreact(ctx, env.Target, j.awardID)
+		_ = env.GitLab.Unreact(ctx, env.Target, j.awardNote, j.awardID)
 	}
 	emoji := "white_check_mark"
 	if state != StateSucceeded {
 		emoji = "x"
 	}
-	_, _ = env.GitLab.React(ctx, env.Target, emoji)
+	_, _ = env.GitLab.React(ctx, env.Target, j.awardNote, emoji)
 }
 
 func (s *Service) finishIssue(ctx context.Context, j *job, env *agent.Env, state State, reason string, outcome agent.Outcome) {
