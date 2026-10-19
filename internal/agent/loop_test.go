@@ -3,124 +3,66 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/Impre-visible/mihari/internal/sandbox"
 )
 
-type fakeRunner struct {
-	mu       sync.Mutex
-	commands []string
-	stdin    []string
-}
-
-func (f *fakeRunner) Exec(_ context.Context, command string, stdin []byte, _ time.Duration) (sandbox.Result, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.commands = append(f.commands, command)
-	f.stdin = append(f.stdin, string(stdin))
-	return sandbox.Result{Stdout: "./main.go\n"}, nil
-}
-
-// scriptedModel answers each chat request with the next scripted tool calls
-// and records what it was sent.
-func scriptedModel(t *testing.T, script [][]map[string]any) (*httptest.Server, *[]map[string]any) {
-	var mu sync.Mutex
-	var requests []map[string]any
-	turn := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&req)
-		mu.Lock()
-		requests = append(requests, req)
-		calls := script[min(turn, len(script)-1)]
-		turn++
-		mu.Unlock()
-		msg := map[string]any{"role": "assistant", "content": nil}
-		if len(calls) > 0 {
-			msg["tool_calls"] = calls
-		} else {
-			msg["content"] = "je réfléchis"
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"choices": []any{map[string]any{"message": msg}},
-			"usage":   map[string]any{"prompt_tokens": 100},
-		})
-	}))
-	t.Cleanup(srv.Close)
-	return srv, &requests
-}
-
-func call(id, name string, args any) map[string]any {
-	data, _ := json.Marshal(args)
-	return map[string]any{"id": id, "type": "function", "function": map[string]any{"name": name, "arguments": string(data)}}
-}
-
-func TestRunLoop(t *testing.T) {
-	srv, requests := scriptedModel(t, [][]map[string]any{
-		{call("a", "list_files", map[string]any{})},
-		{call("b", "write_file", map[string]any{"path": "x_test.go", "content": "package x"})},
-		{call("c", "finish", map[string]any{"success": true, "summary": "Test ajouté."})},
-	})
-	runner := &fakeRunner{}
-	env := &Env{Kind: KindPing, Runner: runner}
-	inbox := make(chan Event, 1)
-	inbox <- Event{Kind: "message", Title: "Nouveau message de @romeo", Text: "et ajoute un cas vide"}
-
-	var events []Event
-	out, err := Run(context.Background(), Config{URL: srv.URL, Model: "m", MaxTurns: 10, Timeout: time.Minute, ContextTokens: 8192},
-		env, "système", "tâche", inbox, func(e Event) { events = append(events, e) })
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !out.Success || out.Summary != "Test ajouté." || out.Turns != 3 {
-		t.Errorf("outcome %+v", out)
-	}
-	if runner.stdin[1] != "package x" || !strings.Contains(runner.commands[1], "/workspace/x_test.go") {
-		t.Errorf("write_file ran %q with %q", runner.commands[1], runner.stdin[1])
-	}
-
-	// The thread message rode along with the first tool result.
-	second := (*requests)[1]["messages"].([]any)
-	last := second[len(second)-1].(map[string]any)
-	if last["role"] != "tool" || !strings.Contains(last["content"].(string), "et ajoute un cas vide") {
-		t.Errorf("inbox not injected: %v", last)
-	}
-
-	// MR tools are not offered outside a merge request.
-	offered := map[string]bool{}
-	for _, tool := range (*requests)[0]["tools"].([]any) {
-		offered[tool.(map[string]any)["function"].(map[string]any)["name"].(string)] = true
-	}
-	if !offered["run_command"] || !offered["finish"] || offered["reply"] || offered["push"] {
-		t.Errorf("offered tools: %v", offered)
-	}
-}
+// The loop with real tools is tested in internal/tools.
 
 func TestIdleModelFails(t *testing.T) {
-	srv, _ := scriptedModel(t, [][]map[string]any{{}})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": "je réfléchis"}}},
+		})
+	}))
+	defer srv.Close()
 	_, err := Run(context.Background(), Config{URL: srv.URL, Model: "m", MaxTurns: 10, Timeout: time.Minute},
-		&Env{Runner: &fakeRunner{}}, "s", "t", nil, func(Event) {})
+		&Env{}, "s", "t", nil, func(Event) {})
 	if err == nil || !strings.Contains(err.Error(), "sans appeler d'outil") {
 		t.Fatalf("got %v", err)
 	}
 }
 
 func TestSchema(t *testing.T) {
-	s := schemaOf(reflectType[readFileArgs]())
+	type args struct {
+		Path  string   `json:"path" desc:"Chemin"`
+		Start int      `json:"start_line,omitempty"`
+		Mode  string   `json:"mode,omitempty" enum:"a,b"`
+		Tags  []string `json:"tags,omitempty"`
+		Todos []Todo   `json:"todos,omitempty"`
+	}
+	s := schemaOf(reflect.TypeOf(args{}))
 	props := s["properties"].(map[string]any)
-	if props["path"].(map[string]any)["type"] != "string" || props["start_line"].(map[string]any)["type"] != "integer" {
+	if props["path"].(map[string]any)["type"] != "string" || props["path"].(map[string]any)["description"] != "Chemin" ||
+		props["start_line"].(map[string]any)["type"] != "integer" {
 		t.Errorf("schema %v", s)
+	}
+	if enum := props["mode"].(map[string]any)["enum"].([]string); len(enum) != 2 || enum[1] != "b" {
+		t.Errorf("enum %v", props["mode"])
+	}
+	item := props["todos"].(map[string]any)["items"].(map[string]any)
+	if item["properties"].(map[string]any)["status"].(map[string]any)["enum"] == nil {
+		t.Errorf("nested enum %v", item)
 	}
 	if req := s["required"].([]string); len(req) != 1 || req[0] != "path" {
 		t.Errorf("required %v", req)
 	}
+}
+
+func TestRegisterTwicePanics(t *testing.T) {
+	tool := Define("test_twice", "", func(context.Context, *Env, NoArgs) (string, error) { return "", nil })
+	Register(tool)
+	defer func() {
+		if recover() == nil {
+			t.Error("a second tool under one name should panic")
+		}
+	}()
+	Register(tool)
 }
 
 func TestFitContext(t *testing.T) {
@@ -133,36 +75,55 @@ func TestFitContext(t *testing.T) {
 	}
 }
 
-func TestSuggestion(t *testing.T) {
-	body, line, err := suggestion(suggestArgs{StartLine: 10, EndLine: 12, Code: "a := 1\nb := 2\n", Comment: "Plus simple."})
-	if err != nil || line != 12 || body != "Plus simple.\n\n```suggestion:-2+0\na := 1\nb := 2\n```" {
-		t.Errorf("got %q, %d, %v", body, line, err)
+func TestPlan(t *testing.T) {
+	env := &Env{Todos: []Todo{{"Lire", "completed"}, {"Corriger", "in_progress"}, {"Tester", "pending"}}}
+	want := "**Plan**\n\n- [x] Lire\n- [ ] ⏳ **Corriger**\n- [ ] Tester\n"
+	if got := env.Plan(); got != want {
+		t.Errorf("plan %q", got)
 	}
-	// Code that holds a fence gets a longer one.
-	body, _, _ = suggestion(suggestArgs{StartLine: 3, Code: "doc := \"```go\"", Comment: "x"})
-	if !strings.Contains(body, "````suggestion:-0+0\n") || !strings.HasSuffix(body, "\n````") {
-		t.Errorf("fence: %q", body)
+	if env.ClosePlan(context.Background()) != "" {
+		t.Error("a plan never shown has nothing to close")
 	}
-	if _, _, err := suggestion(suggestArgs{StartLine: 5, EndLine: 2}); err == nil {
-		t.Error("reversed range should fail")
+	env.PlanOpen = true
+	if got := env.ClosePlan(context.Background()); got != want+"\n" || env.PlanOpen {
+		t.Errorf("close %q", got)
 	}
 }
 
-func TestRunWithoutLimits(t *testing.T) {
-	script := [][]map[string]any{}
-	for i := range 12 {
-		script = append(script, []map[string]any{call(fmt.Sprint(i), "list_files", map[string]any{})})
-	}
-	script = append(script, []map[string]any{call("end", "finish", map[string]any{"success": true, "summary": "Fini."})})
-	srv, _ := scriptedModel(t, script)
+func TestRetriesPassingEngineFailures(t *testing.T) {
+	saved := retryAfter
+	retryAfter = []time.Duration{time.Millisecond, time.Millisecond}
+	defer func() { retryAfter = saved }()
 
-	// 0 lifts both limits: thirteen turns, no deadline.
-	out, err := Run(context.Background(), Config{URL: srv.URL, Model: "m"},
-		&Env{Kind: KindPing, Runner: &fakeRunner{}}, "système", "tâche", nil, func(Event) {})
-	if err != nil {
-		t.Fatal(err)
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) <= 2 {
+			// What a reverse proxy sends when the remote API drops the connection.
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": "je réfléchis"}}},
+		})
+	}))
+	defer srv.Close()
+	var infos int
+	_, err := Run(context.Background(), Config{URL: srv.URL, Model: "m", MaxTurns: 10, Timeout: time.Minute},
+		&Env{}, "s", "t", nil, func(e Event) {
+			if e.Kind == "info" {
+				infos++
+			}
+		})
+	// Past the two 502s, the model answers; it never calls a tool here.
+	if err == nil || !strings.Contains(err.Error(), "sans appeler d'outil") || infos != 2 {
+		t.Fatalf("got %v after %d retries", err, infos)
 	}
-	if !out.Success || out.Turns != 13 {
-		t.Errorf("outcome %+v", out)
+
+	// Past the last retry, the failure ends the job.
+	requests.Store(-100)
+	_, err = Run(context.Background(), Config{URL: srv.URL, Model: "m", MaxTurns: 10, Timeout: time.Minute},
+		&Env{}, "s", "t", nil, func(Event) {})
+	if err == nil || !strings.Contains(err.Error(), "502") {
+		t.Fatalf("got %v", err)
 	}
 }

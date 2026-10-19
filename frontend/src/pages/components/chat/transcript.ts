@@ -1,4 +1,5 @@
 import type { Event as JobEvent } from "../../../../bindings/github.com/Impre-visible/mihari/internal/agent/models";
+import { todos, type Todo } from "./view";
 
 // A tool call with its result, once the tool has answered.
 export type ToolCall = {
@@ -53,10 +54,6 @@ export function failed(call: ToolCall) {
   return call.result?.text.startsWith("Erreur") ?? false;
 }
 
-export function str(value: unknown) {
-  return typeof value === "string" ? value : value === undefined || value === null ? "" : String(value);
-}
-
 // The exit code run_command, list_files and search append to their output.
 export function exitCode(output: string): number | null {
   const match = output.match(/\n\[code de sortie (\d+)[^\]]*\]$/);
@@ -66,4 +63,13 @@ export function exitCode(output: string): number | null {
 // Output without the exit code line, which the view shows apart.
 export function withoutExitCode(output: string) {
   return output.replace(/\n\[code de sortie \d+[^\]]*\]$/, "");
+}
+
+// The plan of the last todo_write call, [] before the agent made one.
+export function latestPlan(events: JobEvent[]): Todo[] {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i];
+    if (e.kind === "tool" && e.title === "todo_write") return todos(parse(e.text));
+  }
+  return [];
 }

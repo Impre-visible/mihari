@@ -184,3 +184,40 @@ func (c *Client) BranchExists(ctx context.Context, name string) (bool, error) {
 	}
 	return err == nil, err
 }
+
+// Found is an issue or a merge request a search returned.
+type Found struct {
+	IID    int    `json:"iid"`
+	Title  string `json:"title"`
+	State  string `json:"state"`
+	Author string `json:"author"`
+	WebURL string `json:"webUrl"`
+}
+
+// Search finds the project's issues or merge requests whose title or
+// description holds text, newest first; state is opened, closed, merged or
+// "" for any.
+func (c *Client) Search(ctx context.Context, kind TargetType, text, state string, limit int) ([]Found, error) {
+	var items []struct {
+		IID    int    `json:"iid"`
+		Title  string `json:"title"`
+		State  string `json:"state"`
+		WebURL string `json:"web_url"`
+		Author struct {
+			Username string `json:"username"`
+		} `json:"author"`
+	}
+	query := url.Values{"search": {text}, "per_page": {strconv.Itoa(limit)}}
+	if state != "" {
+		query.Set("state", state)
+	}
+	path := "api/v4/projects/" + strconv.Itoa(c.ProjectID) + "/" + kind.collection()
+	if err := get(ctx, c.base, c.token, path, query, &items); err != nil {
+		return nil, err
+	}
+	out := make([]Found, len(items))
+	for i, it := range items {
+		out[i] = Found{IID: it.IID, Title: it.Title, State: it.State, Author: it.Author.Username, WebURL: it.WebURL}
+	}
+	return out, nil
+}

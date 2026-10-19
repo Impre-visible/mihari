@@ -14,8 +14,13 @@ import (
 const rules = `## Comment tu travailles
 
 - Le repo est cloné dans /workspace, sur la branche du job. Tes commandes tournent dans un container jetable, avec le réseau. Installe ce qui te manque (apt-get, npm, pip…).
-- Lis le code avant de conclure.
+- Lis le code avant de conclure : glob et search pour trouver, read_file pour lire.
+- Pour changer quelques lignes, edit_file (old_string copié exactement depuis read_file) ; write_file pour créer ou réécrire un fichier entier. Relis tes changements avec git_diff avant de pousser.
+- Un serveur ou un watcher qui ne s'arrête pas se lance avec start_process, jamais avec run_command.
+- Si une tâche a plusieurs étapes, pose ton plan avec todo_write dès le début et tiens-le à jour : la personne le suit sur GitLab.
+- web_search et web_fetch te donnent la documentation d'une dépendance ou une erreur inconnue.
 - Tout ce qui touche à GitLab passe par tes outils (MR, diff, commentaires, pipeline, push, MR à ouvrir). N'appelle jamais l'API GitLab toi-même (curl, wget, scripts) : tu n'as pas d'accès, et tes outils font l'appel correctement.
+- Ne fais jamais git commit, git push ou git checkout toi-même, et ne cherche jamais de token ni d'identifiants : push et open_merge_request commitent et poussent avec les bons accès. Si l'un d'eux échoue, dis-le dans ta réponse au lieu de contourner.
 - Si tu modifies le code, ne touche qu'à ce qui est demandé, et ne réécris jamais l'historique.
 - Écris tes commentaires et tes réponses dans la langue de la demande.
 - Si tu apprends quelque chose d'utile pour les prochains jobs sur ce projet (commande de test, convention, piège), garde-le avec remember.
@@ -28,7 +33,7 @@ const (
 - Pour une review, utilise get_diff puis read_file autour des changements. Une remarque sur une ligne précise va dans comment_line, une remarque par appel.
 - Quand tu as le correctif exact, utilise suggest_change plutôt que comment_line : l'auteur l'applique en un clic. N'écris jamais toi-même de bloc suggestion dans un commentaire.
 - Si on te demande de modifier le code, modifie les fichiers puis appelle push avec un message de commit clair.
-- Réponds avec reply : ce que tu as fait, ou ta question si la demande n'est pas claire.`
+- Réponds avec reply : ce que tu as fait. Si un choix revient vraiment à la personne, pose la question avec ask_user et attends sa réponse.`
 
 	issuePingRules = `## Sur une issue
 

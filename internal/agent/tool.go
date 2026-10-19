@@ -1,8 +1,9 @@
 // Package agent runs the loop where a local model works on a job by calling
 // tools, until it calls finish or runs out of turns or time.
 //
-// Adding a tool is one call to Register(Define(...)) in any file of this
-// package: the JSON schema the model sees comes from the argument struct.
+// The tools themselves live in internal/tools, one file each: a tool is one
+// call to Register(Define(...)) in an init function there, and the JSON schema
+// the model sees comes from its argument struct.
 package agent
 
 import (
@@ -30,11 +31,26 @@ var (
 	registry   []Tool
 )
 
-// Register adds tools to every job they are available for.
+// Register adds tools to every job they are available for. Two tools under
+// one name would leave the model unable to tell them apart, so that panics.
 func Register(tools ...Tool) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
-	registry = append(registry, tools...)
+	for _, t := range tools {
+		for _, known := range registry {
+			if known.Name() == t.Name() {
+				panic("agent: outil " + t.Name() + " déclaré deux fois")
+			}
+		}
+		registry = append(registry, t)
+	}
+}
+
+// Registered returns every registered tool, available or not.
+func Registered() []Tool {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	return append([]Tool(nil), registry...)
 }
 
 // toolsFor returns the registered tools available for env.
@@ -89,7 +105,8 @@ func When(ok func(*Env) bool) Option {
 
 // Define makes a tool from a function taking its arguments as a struct A.
 // Each field's json tag names the argument, `desc` describes it to the model,
-// and omitempty makes it optional.
+// `enum` lists its allowed values separated by commas, and omitempty makes it
+// optional.
 func Define[A any](name, description string, run func(context.Context, *Env, A) (string, error), opts ...Option) Tool {
 	var o toolOptions
 	for _, opt := range opts {
@@ -118,6 +135,9 @@ func schemaOf(t reflect.Type) map[string]any {
 			prop := typeSchema(f.Type)
 			if desc := f.Tag.Get("desc"); desc != "" {
 				prop["description"] = desc
+			}
+			if enum := f.Tag.Get("enum"); enum != "" {
+				prop["enum"] = strings.Split(enum, ",")
 			}
 			properties[name] = prop
 			if !strings.Contains(opts, "omitempty") {

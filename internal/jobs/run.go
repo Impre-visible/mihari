@@ -16,6 +16,8 @@ import (
 	"github.com/Impre-visible/mihari/internal/projects"
 	"github.com/Impre-visible/mihari/internal/sandbox"
 	"github.com/Impre-visible/mihari/internal/scheduler"
+	// Registers the agent's tools.
+	_ "github.com/Impre-visible/mihari/internal/tools"
 )
 
 // Labels an issues job leaves on its issue.
@@ -166,6 +168,14 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 	cleanups = append(cleanups, func() { _ = container.Close() })
 	env.Runner = container
 
+	// A runtime that cannot see the clone mounts an empty folder in its place:
+	// the agent would then work on nothing, and push nothing.
+	if res, err := container.Exec(ctx, "test -d .git", nil, 30*time.Second); err != nil || res.ExitCode != 0 {
+		return env, cleanup, fmt.Errorf("le repo cloné dans %s est vide dans le container : le moteur de containers ne voit pas ce dossier. "+
+			"Un Docker distant (DOCKER_HOST, docker context) ne voit pas ton disque du tout ; Docker installé en snap ne voit pas les dossiers cachés comme ~/.cache ; "+
+			"Docker Desktop ne voit que les dossiers partagés dans ses réglages (Resources › File sharing)", repo)
+	}
+
 	if branch != "" && !j.dry {
 		pushed := false
 		env.Push = func(ctx context.Context, message string) (string, error) {
@@ -235,7 +245,9 @@ func (s *Service) findThread(ctx context.Context, j *job, env *agent.Env) {
 
 // push commits the workspace as the bot, crediting who asked, and pushes it.
 func (s *Service) push(ctx context.Context, client *gitlab.Client, c *sandbox.Container, repo, branch, message, requester string) (string, error) {
-	c.Chown(ctx)
+	if err := c.Collect(ctx); err != nil {
+		return "", err
+	}
 	bot, err := client.Identity(ctx, client.Bot)
 	if err != nil {
 		return "", err
@@ -243,7 +255,14 @@ func (s *Service) push(ctx context.Context, client *gitlab.Client, c *sandbox.Co
 	if who, err := client.Identity(ctx, requester); err == nil && requester != client.Bot {
 		message = strings.TrimSpace(message) + fmt.Sprintf("\n\nCo-authored-by: %s <%s>", who.Name, who.Email)
 	}
-	return gitlab.Push(ctx, repo, branch, message, bot)
+	sha, err := gitlab.Push(ctx, repo, branch, message, bot)
+	if err != nil {
+		return "", err
+	}
+	if err := c.Committed(ctx); err != nil {
+		log.Printf("push %s: %v", branch, err)
+	}
+	return sha, nil
 }
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
@@ -273,14 +292,13 @@ func freeBranch(ctx context.Context, client *gitlab.Client, issue *gitlab.Issue)
 }
 
 // watchComments passes new comments to the agent, from people allowed to call
-// the bot: replies in the mention's thread for a ping, any comment on the
-// issue for an issues job.
+// the bot: replies in the mention's thread for a ping that has one, any new
+// comment on the merge request or issue otherwise (a mention in a
+// description, a review request, an issues job).
 func (s *Service) watchComments(ctx context.Context, j *job, env *agent.Env, inbox chan<- agent.Event) {
-	if j.Kind == agent.KindPing && env.ThreadID == "" {
-		return
-	}
-	if j.Kind == agent.KindIssues {
-		// What is already there is in the issue the agent reads.
+	whole := env.ThreadID == ""
+	if whole {
+		// What is already there, the agent reads with its tools.
 		if discussions, err := env.GitLab.Discussions(ctx, env.Target); err == nil {
 			s.markSeen(j, discussions)
 		}
@@ -294,7 +312,7 @@ func (s *Service) watchComments(ctx context.Context, j *job, env *agent.Env, inb
 		case <-ticker.C:
 		}
 		var discussions []gitlab.Discussion
-		if j.Kind == agent.KindIssues {
+		if whole {
 			discussions, _ = env.GitLab.Discussions(ctx, env.Target)
 		} else if d, err := env.GitLab.Discussion(ctx, env.Target, env.ThreadID); err == nil {
 			discussions = []gitlab.Discussion{d}
@@ -406,14 +424,14 @@ func (s *Service) finishPing(ctx context.Context, j *job, env *agent.Env, state 
 	}
 	// The model's summary is the answer when it forgot to post one.
 	if state == StateSucceeded && !env.Replied && outcome.Summary != "" {
-		s.post(ctx, env, outcome.Summary)
+		s.post(ctx, env, env.ClosePlan(ctx)+outcome.Summary)
 	}
 	if state != StateSucceeded {
 		msg := "❌ Je n'ai pas pu terminer : " + reason
 		if state == StateCanceled {
 			msg = "❌ " + reason
 		}
-		s.post(ctx, env, msg)
+		s.post(ctx, env, env.ClosePlan(ctx)+msg)
 	}
 	if j.awardID != 0 {
 		_ = env.GitLab.Unreact(ctx, env.Target, j.awardNote, j.awardID)
@@ -443,19 +461,13 @@ func (s *Service) finishIssue(ctx context.Context, j *job, env *agent.Env, state
 	if err := env.GitLab.Relabel(ctx, env.Target.IID, []string{label}, []string{LabelDoing}); err != nil {
 		log.Printf("relabel #%d: %v", env.Target.IID, err)
 	}
-	if _, err := env.GitLab.Comment(ctx, env.Target, msg); err != nil {
+	if _, err := env.GitLab.Comment(ctx, env.Target, env.ClosePlan(ctx)+msg); err != nil {
 		log.Printf("comment #%d: %v", env.Target.IID, err)
 	}
 }
 
 func (s *Service) post(ctx context.Context, env *agent.Env, body string) {
-	var err error
-	if env.ThreadID != "" {
-		_, err = env.GitLab.Reply(ctx, env.Target, env.ThreadID, body)
-	} else {
-		_, err = env.GitLab.Comment(ctx, env.Target, body)
-	}
-	if err != nil {
+	if _, err := env.Respond(ctx, body); err != nil {
 		log.Printf("post on %s: %v", env.Target.Ref(), err)
 	}
 }
