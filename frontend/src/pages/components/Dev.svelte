@@ -32,6 +32,7 @@
   let remoteURL = $state("");
   let remoteKey = $state("");
   let hasRemoteKey = $state(false);
+  let remoteModel = $state("kimi-k2.6");
   let remoteStatus = $state<Status>({ kind: "idle" });
 
   Engine.RemoteSettings()
@@ -50,6 +51,19 @@
       remoteStatus = {
         kind: "ok",
         message: "Enregistré. Choisis le moteur OpenCode Zen dans un profil pour l'utiliser.",
+      };
+    } catch (err) {
+      remoteStatus = { kind: "error", message: errorMessage(err) };
+    }
+  }
+
+  async function testRemote() {
+    remoteStatus = { kind: "busy", label: "Le modèle distant répond…" };
+    try {
+      const r = await Engine.TestRemote(remoteURL.trim(), remoteKey.trim(), remoteModel.trim());
+      remoteStatus = {
+        kind: "ok",
+        message: `${remoteModel.trim()} a répondu en ${(r.durationMs / 1000).toFixed(1)} s : ${r.text.trim() || "(réponse vide)"}`,
       };
     } catch (err) {
       remoteStatus = { kind: "error", message: errorMessage(err) };
@@ -178,7 +192,7 @@
 >
   <FormGroup
     title="Inférence distante"
-    footer="Pour le moteur OpenCode Zen d'un profil : les requêtes partent vers cette API compatible OpenAI au lieu d'un modèle local. Seuls les modèles servis en /v1/chat/completions marchent, et le code des MR quitte la machine."
+    footer="Pour le moteur OpenCode Zen d'un profil : les requêtes partent vers cette API compatible OpenAI au lieu d'un modèle local. Seuls les modèles servis en /v1/chat/completions marchent, et le code des MR quitte la machine. Tester utilise les valeurs saisies, sans les enregistrer."
   >
     <FormRow label="URL de l'API (sans /v1)" for="dev-remote-url">
       <TextField
@@ -210,10 +224,19 @@
         </Button>
       </div>
     </FormRow>
+    <FormRow label="Modèle à tester" for="dev-remote-model">
+      <TextField id="dev-remote-model" class="w-72 font-mono" placeholder="kimi-k2.6" bind:value={remoteModel} />
+    </FormRow>
   </FormGroup>
 
   <div class="mt-4 flex items-center gap-2">
     {@render statusLine(remoteStatus)}
+    <Button
+      disabled={remoteStatus.kind === "busy" || remoteModel.trim() === "" || (!hasRemoteKey && remoteKey.trim() === "")}
+      onclick={testRemote}
+    >
+      Tester
+    </Button>
     <Button type="submit" variant="primary" disabled={remoteStatus.kind === "busy"}>Enregistrer</Button>
   </div>
 </form>

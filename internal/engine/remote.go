@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -81,6 +82,85 @@ func (s *Service) ForgetRemoteKey() error {
 		return devmode.ErrDisabled
 	}
 	return settings.SetSecret(remoteKeyName, "")
+}
+
+// RemoteTest is what a test request to the remote API got back.
+type RemoteTest struct {
+	Text       string `json:"text"`
+	DurationMs int64  `json:"durationMs"`
+}
+
+// TestRemote sends a short message to model on the remote API. An empty URL
+// or key falls back to the saved one, so the form can be tested before saving.
+func (s *Service) TestRemote(rawURL, key, model string) (RemoteTest, error) {
+	if !devmode.Enabled {
+		return RemoteTest{}, devmode.ErrDisabled
+	}
+	base := strings.TrimRight(strings.TrimSpace(rawURL), "/")
+	if base == "" {
+		base = remoteURL()
+	}
+	if key = strings.TrimSpace(key); key == "" {
+		key = remoteKey()
+	}
+	model = strings.TrimSpace(model)
+	switch {
+	case key == "":
+		return RemoteTest{}, errors.New("aucune clé API renseignée")
+	case model == "":
+		return RemoteTest{}, errors.New("aucun modèle renseigné")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if err := checkRemoteModel(ctx, base, key, model); err != nil {
+		return RemoteTest{}, err
+	}
+	begin := time.Now()
+	text, err := remoteChat(ctx, base, key, model, "Réponds seulement OK.")
+	if err != nil {
+		return RemoteTest{}, err
+	}
+	return RemoteTest{Text: text, DurationMs: time.Since(begin).Milliseconds()}, nil
+}
+
+// remoteChat sends one user message, since listing the models proves neither
+// the key nor the model's endpoint: Zen lists every model to anyone.
+func remoteChat(ctx context.Context, base, key, model, message string) (string, error) {
+	body, err := json.Marshal(map[string]any{
+		"model":    model,
+		"messages": []map[string]string{{"role": "user", "content": message}},
+	})
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/v1/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+key)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("API distante injoignable : %w", err)
+	}
+	defer res.Body.Close()
+	var out struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+		return "", fmt.Errorf("réponse illisible de l'API distante (%s) : %w", res.Status, err)
+	}
+	if res.StatusCode != http.StatusOK || len(out.Choices) == 0 {
+		return "", fmt.Errorf("l'API distante a répondu %s : %s", res.Status, out.Error.Message)
+	}
+	return out.Choices[0].Message.Content, nil
 }
 
 // startRemote serves the remote API on 127.0.0.1 behind a proxy that adds the

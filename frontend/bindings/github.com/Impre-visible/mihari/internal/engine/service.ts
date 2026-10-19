@@ -63,3 +63,11 @@ export function RemoteSettings(): $CancellablePromise<$models.Remote> {
 export function SetRemote(rawURL: string, key: string): $CancellablePromise<void> {
     return $Call.ByID(2409036637, rawURL, key);
 }
+
+/**
+ * TestRemote sends a short message to model on the remote API. An empty URL
+ * or key falls back to the saved one, so the form can be tested before saving.
+ */
+export function TestRemote(rawURL: string, key: string, model: string): $CancellablePromise<$models.RemoteTest> {
+    return $Call.ByID(1907929447, rawURL, key, model);
+}

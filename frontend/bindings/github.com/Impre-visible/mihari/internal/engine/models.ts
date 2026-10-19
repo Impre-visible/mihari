@@ -112,3 +112,11 @@ export interface Remote {
     "url": string;
     "hasKey": boolean;
 }
+
+/**
+ * RemoteTest is what a test request to the remote API got back.
+ */
+export interface RemoteTest {
+    "text": string;
+    "durationMs": number;
+}

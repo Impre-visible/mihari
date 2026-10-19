@@ -58,3 +58,23 @@ func TestServeRemote(t *testing.T) {
 		t.Fatal("proxy still listening after Stop")
 	}
 }
+
+func TestRemoteChat(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer secret" {
+			w.WriteHeader(http.StatusUnauthorized)
+			io.WriteString(w, `{"error":{"message":"Invalid credential"}}`)
+			return
+		}
+		io.WriteString(w, `{"choices":[{"message":{"content":"OK"}}]}`)
+	}))
+	defer upstream.Close()
+
+	if text, err := remoteChat(context.Background(), upstream.URL, "secret", "m", "hi"); err != nil || text != "OK" {
+		t.Fatalf("got %q, %v", text, err)
+	}
+	if _, err := remoteChat(context.Background(), upstream.URL, "bad", "m", "hi"); err == nil ||
+		!strings.Contains(err.Error(), "Invalid credential") {
+		t.Fatalf("a refused key should give the API's message, got %v", err)
+	}
+}
