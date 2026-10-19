@@ -275,14 +275,13 @@ func freeBranch(ctx context.Context, client *gitlab.Client, issue *gitlab.Issue)
 }
 
 // watchComments passes new comments to the agent, from people allowed to call
-// the bot: replies in the mention's thread for a ping, any comment on the
-// issue for an issues job.
+// the bot: replies in the mention's thread for a ping that has one, any new
+// comment on the merge request or issue otherwise (a mention in a
+// description, a review request, an issues job).
 func (s *Service) watchComments(ctx context.Context, j *job, env *agent.Env, inbox chan<- agent.Event) {
-	if j.Kind == agent.KindPing && env.ThreadID == "" {
-		return
-	}
-	if j.Kind == agent.KindIssues {
-		// What is already there is in the issue the agent reads.
+	whole := env.ThreadID == ""
+	if whole {
+		// What is already there, the agent reads with its tools.
 		if discussions, err := env.GitLab.Discussions(ctx, env.Target); err == nil {
 			s.markSeen(j, discussions)
 		}
@@ -296,7 +295,7 @@ func (s *Service) watchComments(ctx context.Context, j *job, env *agent.Env, inb
 		case <-ticker.C:
 		}
 		var discussions []gitlab.Discussion
-		if j.Kind == agent.KindIssues {
+		if whole {
 			discussions, _ = env.GitLab.Discussions(ctx, env.Target)
 		} else if d, err := env.GitLab.Discussion(ctx, env.Target, env.ThreadID); err == nil {
 			discussions = []gitlab.Discussion{d}

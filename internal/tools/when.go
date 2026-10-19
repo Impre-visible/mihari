@@ -15,7 +15,8 @@ func reviewing(env *agent.Env) bool {
 func canPush(env *agent.Env) bool   { return env.Push != nil }
 func canOpenMR(env *agent.Env) bool { return env.OpenMR != nil && env.OpenedMR == nil }
 
-// threaded: someone is following the job in a thread, and their replies reach it.
-func threaded(env *agent.Env) bool {
-	return env.Kind == agent.KindPing && env.ThreadID != "" && hasTarget(env)
+// pinged: someone asked for the job and follows it, in its thread or in the
+// comments of the merge request or issue, and their replies reach it.
+func pinged(env *agent.Env) bool {
+	return env.Kind == agent.KindPing && hasTarget(env)
 }

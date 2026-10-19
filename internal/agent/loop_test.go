@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -86,5 +87,43 @@ func TestPlan(t *testing.T) {
 	env.PlanOpen = true
 	if got := env.ClosePlan(context.Background()); got != want+"\n" || env.PlanOpen {
 		t.Errorf("close %q", got)
+	}
+}
+
+func TestRetriesPassingEngineFailures(t *testing.T) {
+	saved := retryAfter
+	retryAfter = []time.Duration{time.Millisecond, time.Millisecond}
+	defer func() { retryAfter = saved }()
+
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) <= 2 {
+			// What a reverse proxy sends when the remote API drops the connection.
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": "je réfléchis"}}},
+		})
+	}))
+	defer srv.Close()
+	var infos int
+	_, err := Run(context.Background(), Config{URL: srv.URL, Model: "m", MaxTurns: 10, Timeout: time.Minute},
+		&Env{}, "s", "t", nil, func(e Event) {
+			if e.Kind == "info" {
+				infos++
+			}
+		})
+	// Past the two 502s, the model answers; it never calls a tool here.
+	if err == nil || !strings.Contains(err.Error(), "sans appeler d'outil") || infos != 2 {
+		t.Fatalf("got %v after %d retries", err, infos)
+	}
+
+	// Past the last retry, the failure ends the job.
+	requests.Store(-100)
+	_, err = Run(context.Background(), Config{URL: srv.URL, Model: "m", MaxTurns: 10, Timeout: time.Minute},
+		&Env{}, "s", "t", nil, func(Event) {})
+	if err == nil || !strings.Contains(err.Error(), "502") {
+		t.Fatalf("got %v", err)
 	}
 }

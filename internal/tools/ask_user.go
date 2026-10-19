@@ -19,7 +19,7 @@ type askUserArgs struct {
 var askTimeout = 30 * time.Minute
 
 func init() {
-	agent.Register(agent.Define("ask_user", "Pose une question à la personne qui t'a sollicité, dans le fil, et attend sa réponse (30 minutes au plus). Seulement quand un choix lui revient vraiment ; sinon décide seul.",
+	agent.Register(agent.Define("ask_user", "Pose une question à la personne qui t'a sollicité, sur GitLab, et attend sa réponse (30 minutes au plus). Seulement quand un choix lui revient vraiment ; sinon décide seul.",
 		func(ctx context.Context, env *agent.Env, a askUserArgs) (string, error) {
 			if strings.TrimSpace(a.Question) == "" {
 				return "", errors.New("question vide")
@@ -51,5 +51,5 @@ func init() {
 				}
 				return fmt.Sprintf("%s :\n%s", m.Title, m.Text), nil
 			}
-		}, agent.When(threaded)))
+		}, agent.When(pinged)))
 }

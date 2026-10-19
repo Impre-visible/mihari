@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 )
 
 type message struct {
@@ -55,9 +57,24 @@ func chat(ctx context.Context, baseURL, model, session string, messages []messag
 	req.Header.Set("X-Opencode-Session", session)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return completion{}, fmt.Errorf("moteur injoignable : %w", err)
+		if ctx.Err() != nil {
+			return completion{}, err
+		}
+		return completion{}, transientError{fmt.Errorf("moteur injoignable : %w", err)}
 	}
 	defer res.Body.Close()
+
+	switch res.StatusCode {
+	case http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway,
+		http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		// Remote APIs and the proxy in front of them drop a request now and then.
+		data, _ := io.ReadAll(io.LimitReader(res.Body, 500))
+		msg := fmt.Sprintf("le moteur a répondu %s", res.Status)
+		if body := strings.TrimSpace(string(data)); body != "" {
+			msg += " : " + body
+		}
+		return completion{}, transientError{fmt.Errorf("%s", msg)}
+	}
 
 	var out struct {
 		Choices []struct {
@@ -98,3 +115,8 @@ func chat(ctx context.Context, baseURL, model, session string, messages []messag
 	}
 	return completion{Message: msg, Reasoning: reasoning, PromptTokens: out.Usage.PromptTokens, CompletionTokens: out.Usage.CompletionTokens}, nil
 }
+
+// transientError is a failure of the engine worth trying again.
+type transientError struct{ error }
+
+func (e transientError) Unwrap() error { return e.error }

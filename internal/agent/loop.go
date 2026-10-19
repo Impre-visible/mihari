@@ -44,6 +44,9 @@ const trimmed = "[sortie retirée pour libérer du contexte]"
 // How many answers in a row without a tool call before giving up on the model.
 const maxIdleAnswers = 3
 
+// Waits before trying the engine again after a passing failure; a variable for tests.
+var retryAfter = []time.Duration{2 * time.Second, 5 * time.Second, 15 * time.Second, 30 * time.Second, time.Minute}
+
 // Run lets the model work on task until it calls finish. Messages arriving on
 // inbox, such as replies in the thread, are handed over after the next tool call.
 func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <-chan Event, emit func(Event)) (Outcome, error) {
@@ -86,6 +89,16 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 		}
 
 		res, err := chat(ctx, cfg.URL, cfg.Model, session, messages, tools)
+		for attempt := 0; err != nil && errors.As(err, new(transientError)) && attempt < len(retryAfter); attempt++ {
+			say("info", "Moteur", fmt.Sprintf("%v ; nouvel essai dans %s.", err, retryAfter[attempt]))
+			select {
+			case <-ctx.Done():
+			case <-time.After(retryAfter[attempt]):
+				res, err = chat(ctx, cfg.URL, cfg.Model, session, messages, tools)
+				continue
+			}
+			break
+		}
 		if err != nil {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				return out(Outcome{Turns: turn}), fmt.Errorf("délai de %s dépassé", cfg.Timeout)

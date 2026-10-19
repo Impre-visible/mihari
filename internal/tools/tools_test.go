@@ -198,7 +198,13 @@ func TestTodoWrite(t *testing.T) {
 }
 
 func TestAskUser(t *testing.T) {
-	env := &agent.Env{Kind: agent.KindPing, DryRun: true, Requester: "romeo", ThreadID: "t", Target: gitlab.Target{Type: gitlab.IssueTarget, IID: 3}}
+	// A mention in an issue's description has no thread: the question is a new comment.
+	env := &agent.Env{Kind: agent.KindPing, DryRun: true, Requester: "romeo", Target: gitlab.Target{Type: gitlab.IssueTarget, IID: 3}}
+	for _, tool := range agent.Registered() {
+		if tool.Name() == "ask_user" && !tool.Available(env) {
+			t.Error("ask_user should be offered to a ping without a thread")
+		}
+	}
 	out, err := run(t, env, "ask_user", map[string]any{"question": "Quelle base ?", "choices": []string{"Postgres", "SQLite"}})
 	if err != nil || !strings.Contains(out, "Décide seul") {
 		t.Fatalf("got %q, %v", out, err)
