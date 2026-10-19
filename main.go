@@ -92,7 +92,11 @@ func main() {
 	app := application.New(application.Options{
 		Name:        "mihari",
 		Description: "To be determined",
+		// Services start in this order. Notifications come first: the
+		// scheduler can report an engine error as soon as it starts, and the
+		// notifier has no D-Bus connection before its own startup.
 		Services: []application.Service{
+			application.NewService(desktopService.Notifier()),
 			application.NewService(&settings.Service{}),
 			application.NewService(&gitlab.Service{}),
 			application.NewService(&projects.Service{}),
@@ -103,7 +107,6 @@ func main() {
 			application.NewService(jobsService),
 			application.NewService(tasksService),
 			application.NewService(desktopService.Service()),
-			application.NewService(desktopService.Notifier()),
 			application.NewService(&updates.Service{}),
 			application.NewService(discordService.Service()),
 		},

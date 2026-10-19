@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Impre-visible/mihari/internal/devmode"
 	"github.com/Impre-visible/mihari/internal/profiles"
 )
 
@@ -42,6 +43,8 @@ func Start(ctx context.Context, p profiles.Profile) (*Server, error) {
 	switch {
 	case !ok:
 		return nil, fmt.Errorf("moteur inconnu : %q", p.Engine)
+	case info.Kind == OpenCode && !devmode.Enabled:
+		return nil, errors.New("l'API distante n'existe que dans les builds de développement : choisis un moteur local pour ce profil")
 	case !info.Supported:
 		return nil, fmt.Errorf("%s ne tourne pas sur cette machine", info.Label)
 	case !info.Installed:
