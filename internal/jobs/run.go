@@ -168,6 +168,13 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 	cleanups = append(cleanups, func() { _ = container.Close() })
 	env.Runner = container
 
+	// A runtime that cannot see the clone mounts an empty folder in its place:
+	// the agent would then work on nothing, and push nothing.
+	if res, err := container.Exec(ctx, "test -d .git", nil, 30*time.Second); err != nil || res.ExitCode != 0 {
+		return env, cleanup, fmt.Errorf("le repo cloné dans %s est vide dans le container : le moteur de containers ne voit pas ce dossier. "+
+			"Docker installé en snap ne voit pas les dossiers cachés comme ~/.cache ; Docker Desktop ne voit que les dossiers partagés dans ses réglages (Resources › File sharing)", repo)
+	}
+
 	if branch != "" && !j.dry {
 		pushed := false
 		env.Push = func(ctx context.Context, message string) (string, error) {
