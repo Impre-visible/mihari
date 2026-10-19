@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { live } from "$lib/live.svelte";
   import { WEEK, agent, hue, ranges } from "./store.svelte";
 
   // The week at a glance: one row per day, the hours each profile holds.
@@ -19,13 +20,22 @@
       }),
     ),
   );
+  // Where the week is now: today's row and the time in it.
+  let today = $derived(WEEK.findIndex((w) => w.day === new Date(live.now).getDay()));
+  let nowAt = $derived.by(() => {
+    const d = new Date(live.now);
+    return (d.getHours() * 60 + d.getMinutes()) / DAY;
+  });
   let fallbackName = $derived(agent.profiles.find((p) => p.id === agent.fallback)?.name);
 </script>
 
 <div class="flex flex-col gap-1">
   {#each WEEK as w, i (w.day)}
     <div class="flex items-center gap-1.5">
-      <span class="p-caption-1 w-3 text-center text-tertiary-label" title={w.label}>{w.short}</span>
+      <span
+        class={["p-caption-1 w-3 text-center", i === today ? "font-bold text-label" : "text-tertiary-label"]}
+        title={i === today ? `${w.label} (aujourd'hui)` : w.label}>{w.short}</span
+      >
       <div class={["relative h-3 flex-1 overflow-hidden rounded-sm", fallbackName ? "bg-fill" : "bg-fill/50"]}>
         {#each bars.filter((b) => b.day === i) as b, k (k)}
           <button
@@ -39,6 +49,14 @@
             onclick={() => b.profile && onpick?.(b.profile)}
           ></button>
         {/each}
+        {#if i === today}
+          <!-- Now, in the text color: no profile has it. -->
+          <span
+            class="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-label shadow-[0_0_0_1px_var(--p-window-bg)]"
+            style:left="{nowAt * 100}%"
+            title="Maintenant"
+          ></span>
+        {/if}
       </div>
     </div>
   {/each}
