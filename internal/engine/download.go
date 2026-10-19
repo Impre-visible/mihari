@@ -38,6 +38,10 @@ func presence(kind Kind, model string) Presence {
 	if model == "" {
 		return PresenceMissing
 	}
+	if kind == OpenCode {
+		// Served remotely; startRemote checks it exists.
+		return PresenceReady
+	}
 	if isLocalPath(model) {
 		if _, err := os.Stat(model); err != nil {
 			return PresenceNoFile
@@ -67,6 +71,9 @@ func presence(kind Kind, model string) Presence {
 // while unknown.
 func download(ctx context.Context, kind Kind, model string, progress func(done, total int64)) error {
 	model = strings.TrimSpace(model)
+	if kind == OpenCode {
+		return errors.New("un modèle distant ne se télécharge pas")
+	}
 	if isLocalPath(model) {
 		return errors.New("un chemin local ne se télécharge pas")
 	}

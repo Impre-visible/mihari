@@ -11,6 +11,7 @@
   } from "../../../bindings/github.com/Impre-visible/mihari/internal/scheduler/models";
   import { Service as Projects } from "../../../bindings/github.com/Impre-visible/mihari/internal/projects";
   import type { View as ProjectView } from "../../../bindings/github.com/Impre-visible/mihari/internal/projects/models";
+  import { Service as Engine } from "../../../bindings/github.com/Impre-visible/mihari/internal/engine";
   import { Service as Sandbox } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox";
   import type { TryResult } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox/models";
   import { Button, Checkbox, FormGroup, FormRow, Select, Spinner, TextArea, TextField } from "$lib/ui";
@@ -24,6 +25,73 @@
 
   function errorMessage(err: unknown) {
     return err instanceof Error ? err.message : String(err);
+  }
+
+  // Remote inference
+
+  // Mirrors OpenCodeGoURL and OpenCodeZenURL in internal/engine/remote.go.
+  const OFFERS = [
+    { value: "https://opencode.ai/inference/go", label: "OpenCode Go (abonnement)" },
+    { value: "https://opencode.ai/zen", label: "OpenCode Zen (crédits)" },
+    { value: "custom", label: "Autre API compatible OpenAI" },
+  ];
+
+  let remoteOffer = $state(OFFERS[0].value);
+  let remoteURL = $state("");
+  let remoteKey = $state("");
+  let hasRemoteKey = $state(false);
+  let remoteModel = $state("glm-5.3");
+
+  function chosenURL() {
+    return remoteOffer === "custom" ? remoteURL.trim() : remoteOffer;
+  }
+  let remoteStatus = $state<Status>({ kind: "idle" });
+
+  Engine.RemoteSettings()
+    .then((r) => {
+      const known = OFFERS.some((o) => o.value === r.url);
+      remoteOffer = known ? r.url : "custom";
+      remoteURL = known ? "" : r.url;
+      hasRemoteKey = r.hasKey;
+    })
+    .catch((err) => console.error("Load remote settings:", err));
+
+  async function saveRemote() {
+    remoteStatus = { kind: "busy", label: "Enregistrement…" };
+    try {
+      await Engine.SetRemote(chosenURL(), remoteKey.trim());
+      hasRemoteKey ||= remoteKey.trim() !== "";
+      remoteKey = "";
+      remoteStatus = {
+        kind: "ok",
+        message: "Enregistré. Choisis le moteur OpenCode dans un profil pour l'utiliser.",
+      };
+    } catch (err) {
+      remoteStatus = { kind: "error", message: errorMessage(err) };
+    }
+  }
+
+  async function testRemote() {
+    remoteStatus = { kind: "busy", label: "Le modèle distant répond…" };
+    try {
+      const r = await Engine.TestRemote(chosenURL(), remoteKey.trim(), remoteModel.trim());
+      remoteStatus = {
+        kind: "ok",
+        message: `${remoteModel.trim()} a répondu en ${(r.durationMs / 1000).toFixed(1)} s : ${r.text.trim() || "(réponse vide)"}`,
+      };
+    } catch (err) {
+      remoteStatus = { kind: "error", message: errorMessage(err) };
+    }
+  }
+
+  async function forgetRemoteKey() {
+    try {
+      await Engine.ForgetRemoteKey();
+      hasRemoteKey = false;
+      remoteStatus = { kind: "ok", message: "Clé supprimée." };
+    } catch (err) {
+      remoteStatus = { kind: "error", message: errorMessage(err) };
+    }
   }
 
   // Simulated ping
@@ -130,6 +198,73 @@
 
 <form
   class="mt-6"
+  oninput={() => remoteStatus.kind !== "busy" && (remoteStatus = { kind: "idle" })}
+  onsubmit={(e) => {
+    e.preventDefault();
+    saveRemote();
+  }}
+>
+  <FormGroup
+    title="Inférence distante"
+    footer="Pour le moteur OpenCode d'un profil : les requêtes partent vers cette API compatible OpenAI au lieu d'un modèle local. Seuls les modèles servis en /v1/chat/completions marchent, et le code des MR quitte la machine. Tester utilise les valeurs saisies, sans les enregistrer."
+  >
+    <FormRow label="Offre" for="dev-remote-offer">
+      <Select id="dev-remote-offer" class="me-7" options={OFFERS} bind:value={remoteOffer} />
+    </FormRow>
+    {#if remoteOffer === "custom"}
+      <FormRow label="URL de l'API (sans /v1)" for="dev-remote-url">
+        <TextField
+          id="dev-remote-url"
+          type="url"
+          class="w-96 font-mono"
+          placeholder="https://openrouter.ai/api"
+          bind:value={remoteURL}
+        />
+      </FormRow>
+    {/if}
+    <FormRow label="Clé API" for="dev-remote-key">
+      <div class="flex items-center gap-2">
+        <TextField
+          id="dev-remote-key"
+          type="password"
+          class="w-72 font-mono"
+          placeholder={hasRemoteKey ? "Enregistrée, laisser vide pour la garder" : "sk-…"}
+          bind:value={remoteKey}
+        />
+        <Button
+          size="small"
+          variant="borderless"
+          iconOnly
+          aria-label="Supprimer la clé"
+          disabled={!hasRemoteKey}
+          onclick={forgetRemoteKey}
+        >
+          <TrashIcon size={14} aria-hidden="true" />
+        </Button>
+      </div>
+    </FormRow>
+    <FormRow label="Modèle à tester" for="dev-remote-model">
+      <TextField id="dev-remote-model" class="w-72 font-mono" placeholder="glm-5.3" bind:value={remoteModel} />
+    </FormRow>
+  </FormGroup>
+
+  <div class="mt-4 flex items-center gap-2">
+    {@render statusLine(remoteStatus)}
+    <Button
+      disabled={remoteStatus.kind === "busy" ||
+        remoteModel.trim() === "" ||
+        (remoteOffer === "custom" && remoteURL.trim() === "") ||
+        (!hasRemoteKey && remoteKey.trim() === "")}
+      onclick={testRemote}
+    >
+      Tester
+    </Button>
+    <Button type="submit" variant="primary" disabled={remoteStatus.kind === "busy"}>Enregistrer</Button>
+  </div>
+</form>
+
+<form
+  class="mt-8"
   oninput={() => pingStatus.kind !== "busy" && (pingStatus = { kind: "idle" })}
   onsubmit={(e) => {
     e.preventDefault();

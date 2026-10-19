@@ -119,6 +119,14 @@ Prévoir environ 4 Go de RAM pour l'instance.
 
 Utiliser un petit modèle GGUF avec llama.cpp dans un profil de développement. Le moteur vllm-mlx ne se teste que sur un Mac Apple Silicon.
 
+Ou déporter l'inférence avec le moteur **OpenCode (dev, distant)**, présent seulement dans les builds de développement :
+
+1. Créer une clé API sur [opencode.ai/auth](https://opencode.ai/auth), avec un abonnement OpenCode Go ou des crédits Zen.
+2. Dans la page Dev, choisir l'offre (Go, Zen, ou une autre API compatible OpenAI), renseigner la clé (gardée dans le trousseau), puis **Tester** et **Enregistrer**.
+3. Dans un profil, choisir ce moteur et un modèle servi en `/v1/chat/completions` (`glm-5.3`, `kimi-k3`, `deepseek-v4-pro`…). Les modèles gratuits de Zen sont réservés au client OpenCode et refusent les autres applications ; Zen sans crédit répond `402`.
+
+Mihari sert l'API sur `127.0.0.1` derrière un proxy qui ajoute la clé, son user agent et l'identifiant de session par job qu'OpenCode Go exige : les jobs y parlent comme à un moteur local. Le code des MR part alors chez le fournisseur, d'où le moteur absent des builds de production.
+
 ## Configuration
 
 Exemple de configuration :

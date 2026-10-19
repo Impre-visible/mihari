@@ -36,8 +36,38 @@ export function Downloads(): $CancellablePromise<$models.Download[] | null> {
 }
 
 /**
+ * ForgetRemoteKey removes the stored API key.
+ */
+export function ForgetRemoteKey(): $CancellablePromise<void> {
+    return $Call.ByID(1858928453);
+}
+
+/**
  * Presence says whether model is ready to run on kind.
  */
 export function Presence(kind: $models.Kind, model: string): $CancellablePromise<$models.Presence> {
     return $Call.ByID(2274644968, kind, model);
+}
+
+/**
+ * RemoteSettings returns the remote API the OpenCode engine uses.
+ */
+export function RemoteSettings(): $CancellablePromise<$models.Remote> {
+    return $Call.ByID(2670365602);
+}
+
+/**
+ * SetRemote saves the remote API's URL, "" meaning OpenCode Go. An empty key
+ * keeps the stored one.
+ */
+export function SetRemote(rawURL: string, key: string): $CancellablePromise<void> {
+    return $Call.ByID(2409036637, rawURL, key);
+}
+
+/**
+ * TestRemote sends a short message to model on the remote API. An empty URL
+ * or key falls back to the saved one, so the form can be tested before saving.
+ */
+export function TestRemote(rawURL: string, key: string, model: string): $CancellablePromise<$models.RemoteTest> {
+    return $Call.ByID(1907929447, rawURL, key, model);
 }

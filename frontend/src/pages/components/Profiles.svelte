@@ -312,6 +312,8 @@
                   <Spinner small label="Téléchargement du modèle" />
                 {/if}
               </button>
+            {:else if p.engine === "opencode"}
+              <!-- Served remotely, nothing to download. -->
             {:else if presences[key] === "ready"}
               <span title="Modèle téléchargé">
                 <CheckCircleIcon size={16} weight="fill" class="text-(--p-sys-green)" aria-label="Modèle téléchargé" />

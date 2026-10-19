@@ -50,8 +50,11 @@ func Start(ctx context.Context, p profiles.Profile) (*Server, error) {
 		return nil, errors.New("aucun modèle renseigné dans le profil")
 	}
 
-	if info.Kind == LMStudio {
+	switch info.Kind {
+	case LMStudio:
 		return startLMStudio(ctx, info.Path, p)
+	case OpenCode:
+		return startRemote(ctx, p)
 	}
 
 	port, err := freePort()
