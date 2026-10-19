@@ -195,6 +195,16 @@ func TestTodoWrite(t *testing.T) {
 	if len(env.Posts) != 2 || env.Posts[0].Kind != "plan" || env.Posts[1].Body != "**Plan**\n\n- [x] Lire\n\nFait." {
 		t.Errorf("posts %+v", env.Posts)
 	}
+
+	// Ticking the plan after the answer updates the answer, not a new plan comment.
+	_, _ = run(t, env, "todo_write", map[string]any{"todos": []map[string]string{
+		{"content": "Lire", "status": "completed"}, {"content": "Répondre", "status": "completed"}}})
+	if last := env.Posts[len(env.Posts)-1]; len(env.Posts) != 3 || last.Body != "**Plan**\n\n- [x] Lire\n- [x] Répondre\n\nFait." || env.PlanOpen {
+		t.Errorf("after the answer: %+v", env.Posts)
+	}
+	if env.ClosePlan(context.Background()) != "" {
+		t.Error("the answer already shows the plan")
+	}
 }
 
 func TestAskUser(t *testing.T) {

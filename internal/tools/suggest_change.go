@@ -32,10 +32,11 @@ func init() {
 				return fmt.Sprintf("Suggestion postée sur %s:%d.", a.Path, line), nil
 			}
 			// A suggestion only applies anchored to a line of the new file in the diff.
-			if err := env.GitLab.CommentLine(ctx, env.MR, oldPath, newPath, line, 0, body); err != nil {
+			thread, err := env.GitLab.CommentLine(ctx, env.MR, oldPath, newPath, line, 0, body)
+			if err != nil {
 				return "", fmt.Errorf("la ligne %d de %s n'est pas modifiable par une suggestion (elle doit être dans le diff) : %w", line, a.Path, err)
 			}
-			return fmt.Sprintf("Suggestion postée sur %s:%d.", a.Path, line), nil
+			return fmt.Sprintf("Suggestion postée sur %s:%d (fil %s, pour reply_to_thread).", a.Path, line, thread), nil
 		}, agent.When(reviewing)))
 }
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Impre-visible/mihari/internal/agent"
+	"github.com/Impre-visible/mihari/internal/gitlab"
 )
 
 type replyArgs struct {
@@ -19,11 +20,16 @@ func init() {
 				return "", errors.New("réponse vide")
 			}
 			// The plan's own comment gives way to the answer, which notifies.
-			body := env.ClosePlan(ctx) + a.Body
-			if !env.Keep(agent.Post{Kind: "reply", Body: body}) {
-				if _, err := env.Respond(ctx, body); err != nil {
+			plan := env.ClosePlan(ctx)
+			var note gitlab.Note
+			if !env.Keep(agent.Post{Kind: "reply", Body: plan + a.Body}) {
+				var err error
+				if note, err = env.Respond(ctx, plan+a.Body); err != nil {
 					return "", err
 				}
+			}
+			if plan != "" {
+				env.PlanTakenIn(note.ID, a.Body)
 			}
 			env.Replied = true
 			return "Réponse postée.", nil

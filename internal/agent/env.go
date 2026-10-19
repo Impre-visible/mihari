@@ -60,9 +60,12 @@ type Env struct {
 	OpenedMR *gitlab.MergeRequest
 	// The model's plan, as todo_write last left it.
 	Todos []Todo
-	// The comment showing the plan on GitLab, 0 when there is none to update.
+	// The comment showing the plan on GitLab, 0 when there is none to update:
+	// the plan's own, or the answer that took it in.
 	PlanNoteID int
-	// Whether the plan changed since a reply last carried it.
+	// What follows the plan in that comment: the answer, "" in the plan's own.
+	PlanBody string
+	// Whether the plan's own comment waits for an answer to take it in.
 	PlanOpen bool
 }
 
@@ -99,9 +102,18 @@ func (e *Env) Plan() string {
 	return b.String()
 }
 
+// PlanNote is the text of the comment showing the plan.
+func (e *Env) PlanNote() string {
+	if e.PlanBody == "" {
+		return e.Plan()
+	}
+	return e.Plan() + "\n" + e.PlanBody
+}
+
 // ClosePlan removes the plan's own comment and returns the plan, for the
 // answer to carry: one message at the end, which notifies, where editing
 // the plan's comment would not. "" when no plan is waiting to be shown.
+// The answer then calls PlanTakenIn, so that later plan updates edit it.
 func (e *Env) ClosePlan(ctx context.Context) string {
 	if !e.PlanOpen {
 		return ""
@@ -111,6 +123,11 @@ func (e *Env) ClosePlan(ctx context.Context) string {
 	}
 	e.PlanNoteID, e.PlanOpen = 0, false
 	return e.Plan() + "\n"
+}
+
+// PlanTakenIn records the answer that now shows the plan above body.
+func (e *Env) PlanTakenIn(noteID int, body string) {
+	e.PlanNoteID, e.PlanBody = noteID, body
 }
 
 // Post is something a tool would have posted on GitLab during a dry run.

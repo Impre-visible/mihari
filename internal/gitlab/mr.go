@@ -98,8 +98,9 @@ func (c *Client) Diffs(ctx context.Context, iid int) ([]FileDiff, error) {
 }
 
 // CommentLine starts a thread on a line of the diff: a line of the new file,
-// or of the old one for a removed line. GitLab rejects lines outside the diff.
-func (c *Client) CommentLine(ctx context.Context, mr MergeRequest, oldPath, newPath string, newLine, oldLine int, body string) error {
+// or of the old one for a removed line, and returns the thread's id. GitLab
+// rejects lines outside the diff.
+func (c *Client) CommentLine(ctx context.Context, mr MergeRequest, oldPath, newPath string, newLine, oldLine int, body string) (string, error) {
 	position := map[string]any{
 		"position_type": "text",
 		"base_sha":      mr.BaseSHA,
@@ -114,9 +115,12 @@ func (c *Client) CommentLine(ctx context.Context, mr MergeRequest, oldPath, newP
 	if oldLine > 0 {
 		position["old_line"] = oldLine
 	}
+	var d struct {
+		ID string `json:"id"`
+	}
 	_, err := send(ctx, http.MethodPost, c.base, c.token, c.mrPath(mr.IID, "/discussions"), nil,
-		map[string]any{"body": body, "position": position}, nil)
-	return err
+		map[string]any{"body": body, "position": position}, &d)
+	return d.ID, err
 }
 
 // Identity is a name and email for git commits.

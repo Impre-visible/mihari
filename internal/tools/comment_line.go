@@ -23,10 +23,10 @@ func init() {
 			if env.Keep(agent.Post{Kind: "comment", Path: a.Path, Line: a.Line, Body: a.Body}) {
 				return fmt.Sprintf("Commentaire posté sur %s:%d.", a.Path, a.Line), nil
 			}
-			err = env.GitLab.CommentLine(ctx, env.MR, oldPath, newPath, a.Line, 0, a.Body)
+			thread, err := env.GitLab.CommentLine(ctx, env.MR, oldPath, newPath, a.Line, 0, a.Body)
 			if err != nil {
 				// Maybe a removed line, numbered in the old file.
-				err = env.GitLab.CommentLine(ctx, env.MR, oldPath, newPath, 0, a.Line, a.Body)
+				thread, err = env.GitLab.CommentLine(ctx, env.MR, oldPath, newPath, 0, a.Line, a.Body)
 			}
 			if err != nil {
 				// Outside the diff: still worth saying, as a regular comment.
@@ -36,6 +36,6 @@ func init() {
 				}
 				return fmt.Sprintf("La ligne %d de %s n'est pas dans le diff : posté en commentaire normal.", a.Line, a.Path), nil
 			}
-			return fmt.Sprintf("Commentaire posté sur %s:%d.", a.Path, a.Line), nil
+			return fmt.Sprintf("Commentaire posté sur %s:%d (fil %s, pour reply_to_thread).", a.Path, a.Line, thread), nil
 		}, agent.When(reviewing)))
 }

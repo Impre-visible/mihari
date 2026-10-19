@@ -33,15 +33,17 @@ func init() {
 					return "", fmt.Errorf("état inconnu %q pour l'étape %d : pending, in_progress ou completed", t.Status, i+1)
 				}
 			}
-			env.Todos, env.PlanOpen = a.Todos, true
+			env.Todos = a.Todos
+			// Once an answer shows the plan, updates go to it, not to a new comment.
+			env.PlanOpen = env.PlanBody == ""
 			result := fmt.Sprintf("Plan à jour : %d/%d étapes faites.", done, len(a.Todos))
-			if !hasTarget(env) || env.Keep(agent.Post{Kind: "plan", Body: env.Plan()}) {
+			if !hasTarget(env) || env.Keep(agent.Post{Kind: "plan", Body: env.PlanNote()}) {
 				return result, nil
 			}
 			// Editing the plan's comment notifies nobody: only the first post does.
 			var err error
 			if env.PlanNoteID != 0 {
-				err = env.GitLab.EditNote(ctx, env.Target, env.PlanNoteID, env.Plan())
+				err = env.GitLab.EditNote(ctx, env.Target, env.PlanNoteID, env.PlanNote())
 			} else {
 				var note gitlab.Note
 				if note, err = env.Respond(ctx, env.Plan()); err == nil {

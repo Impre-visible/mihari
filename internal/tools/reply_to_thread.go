@@ -9,7 +9,7 @@ import (
 )
 
 type replyThreadArgs struct {
-	ThreadID string `json:"thread_id" desc:"Identifiant du fil, tel que read_comments l'affiche"`
+	ThreadID string `json:"thread_id" desc:"Identifiant du fil, tel que comment_line, suggest_change ou read_comments l'affichent"`
 	Body     string `json:"body" desc:"La réponse, en Markdown"`
 }
 
