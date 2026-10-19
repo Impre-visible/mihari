@@ -26,10 +26,13 @@ export interface Profile {
     "extraArgs": string;
 
     /**
-     * A job fails past this many model calls or minutes.
+     * A job fails past this many model calls or minutes, unless the matching
+     * Unlimited field lifts the limit.
      */
     "maxTurns": number;
     "maxMinutes": number;
+    "unlimitedTurns": boolean;
+    "unlimitedTime": boolean;
 }
 
 /**

@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import {
+    ArrowDownIcon,
     ArrowLeftIcon,
     ArrowSquareOutIcon,
     CheckCircleIcon,
@@ -14,6 +16,7 @@
   import { Button, FormGroup, Spinner } from "$lib/ui";
   import { ref } from "$lib/refs";
   import { nav } from "$lib/nav.svelte";
+  import JobChat from "./chat/JobChat.svelte";
 
   type Props = { now: number };
   let { now }: Props = $props();
@@ -25,13 +28,15 @@
     failed: "échec",
     canceled: "annulé",
   };
-  // Long outputs fold past this, so a transcript stays scrollable.
-  const FOLD = 1500;
 
   let jobs = $state<Summary[]>([]);
   let selected = $state<number | null>(null);
   let events = $state<JobEvent[]>([]);
-  let unfolded = $state<Record<number, boolean>>({});
+  // The page's scrolling area, and whether its view rests on the end of the
+  // transcript: new lines then keep it there, otherwise the reader stays put.
+  let header = $state<HTMLElement | null>(null);
+  let scroller = $derived(header?.closest<HTMLElement>(".ui-app-content") ?? null);
+  let atBottom = $state(true);
 
   let active = $derived(jobs.filter((j) => j.state === "queued" || j.state === "running"));
   let history = $derived(jobs.filter((j) => j.state !== "queued" && j.state !== "running"));
@@ -63,7 +68,7 @@
   function open(id: number) {
     selected = id;
     events = [];
-    unfolded = {};
+    atBottom = true;
     Jobs.Transcript(id)
       .then((list) => {
         // Lines that arrived while loading are in the list too.
@@ -72,39 +77,33 @@
       .catch((err) => console.error("Load transcript:", err));
   }
 
+  function measure() {
+    if (scroller) atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
+  }
+
+  function toBottom(behavior: ScrollBehavior = "instant") {
+    scroller?.scrollTo({ top: scroller.scrollHeight, behavior });
+  }
+
+  $effect(() => {
+    const el = scroller;
+    if (!el) return;
+    el.addEventListener("scroll", measure, { passive: true });
+    return () => el.removeEventListener("scroll", measure);
+  });
+
+  // Runs on each new line, after the page has grown.
+  $effect(() => {
+    void events.length;
+    if (atBottom) tick().then(() => toBottom());
+  });
+
   function duration(j: Summary) {
     const start = Date.parse(j.startedAt);
     if (j.startedAt.startsWith("0001")) return "";
     const end = j.endedAt.startsWith("0001") ? now : Date.parse(j.endedAt);
     const s = Math.max(0, Math.round((end - start) / 1000));
     return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")}`;
-  }
-
-  function time(at: string) {
-    return new Date(at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  }
-
-  function label(e: JobEvent) {
-    switch (e.kind) {
-      case "tool":
-        return `→ ${e.title}`;
-      case "result":
-        return `← ${e.title}`;
-      default:
-        return e.title;
-    }
-  }
-
-  // Tool arguments arrive as JSON; shown indented they read better.
-  function body(e: JobEvent) {
-    if (e.kind === "tool") {
-      try {
-        return JSON.stringify(JSON.parse(e.text), null, 2);
-      } catch {
-        return e.text;
-      }
-    }
-    return e.text;
   }
 </script>
 
@@ -140,82 +139,58 @@
 {/snippet}
 
 {#if current}
-  <div class="mt-6 flex items-center gap-2">
-    <Button size="small" variant="borderless" onclick={() => (selected = null)}>
-      <ArrowLeftIcon size={14} aria-hidden="true" />
-      Jobs
-    </Button>
-    <div class="flex min-w-0 flex-1 items-center gap-1.5">
-      {@render stateIcon(current.state)}
-      <span class="truncate">{current.title}</span>
-    </div>
-    <Button size="small" variant="borderless" onclick={() => Browser.OpenURL(current.url)}>
-      <ArrowSquareOutIcon size={14} aria-hidden="true" />
-      {current.targetType === "Issue" ? "Issue" : "MR"}
-    </Button>
-    {#if current.openedMr}
-      <Button size="small" variant="borderless" onclick={() => Browser.OpenURL(current.openedMr)}>
-        <ArrowSquareOutIcon size={14} aria-hidden="true" />
-        MR ouverte
+  <!-- Stays at the top of the page while the transcript scrolls under it;
+       the negative offsets cancel the page padding. -->
+  <div bind:this={header} class="sticky -top-[20px] z-10 -mx-[24px] mt-2 border-b border-separator bg-window px-[24px] pt-3 pb-2">
+    <div class="flex items-center gap-2">
+      <Button size="small" variant="borderless" onclick={() => (selected = null)}>
+        <ArrowLeftIcon size={14} aria-hidden="true" />
+        Jobs
       </Button>
-    {/if}
-    {#if current.state === "running" || current.state === "queued"}
-      <Button size="small" onclick={() => Jobs.Cancel(current.id)}>Annuler</Button>
+      <div class="flex min-w-0 flex-1 items-center gap-1.5">
+        {@render stateIcon(current.state)}
+        <span class="truncate">{current.title}</span>
+      </div>
+      <Button size="small" variant="borderless" onclick={() => Browser.OpenURL(current.url)}>
+        <ArrowSquareOutIcon size={14} aria-hidden="true" />
+        {current.targetType === "Issue" ? "Issue" : "MR"}
+      </Button>
+      {#if current.openedMr}
+        <Button size="small" variant="borderless" onclick={() => Browser.OpenURL(current.openedMr)}>
+          <ArrowSquareOutIcon size={14} aria-hidden="true" />
+          MR ouverte
+        </Button>
+      {/if}
+      {#if current.state === "running" || current.state === "queued"}
+        <Button size="small" onclick={() => Jobs.Cancel(current.id)}>Annuler</Button>
+      {/if}
+    </div>
+    <p class="p-subhead-2 mt-1 ms-2.5 text-secondary-label">
+      {ref(current.project, current.targetType, current.iid)} · @{current.author} · {STATES[current.state]}{current.profile
+        ? ` · ${current.profile}`
+        : ""}{duration(current) ? ` · ${duration(current)}` : ""}{current.turns ? ` · ${current.turns} tours` : ""}
+    </p>
+    {#if current.error}
+      <p class="p-subhead-2 mt-2 ms-2.5 line-clamp-3 text-label select-text">{current.error}</p>
     {/if}
   </div>
-  <p class="p-subhead-2 mt-1 ms-2.5 text-secondary-label">
-    {ref(current.project, current.targetType, current.iid)} · @{current.author} · {STATES[current.state]}{current.profile
-      ? ` · ${current.profile}`
-      : ""}{duration(current) ? ` · ${duration(current)}` : ""}{current.turns ? ` · ${current.turns} tours` : ""}
-  </p>
-  {#if current.error}
-    <p class="p-subhead-2 mt-2 ms-2.5 text-label select-text">{current.error}</p>
-  {/if}
 
-  <FormGroup class="mt-4">
-    {#each events as e, i (i)}
-      {@const text = body(e)}
-      {@const long = text.length > FOLD}
-      <div class="p-form-row flex-col items-stretch! gap-1 py-2">
-        <div class="flex items-center gap-2">
-          <span
-            class={[
-              "p-subhead-2 font-semibold",
-              e.kind === "error" && "text-(--p-sys-red)",
-              e.kind === "message" && "text-(--p-sys-blue)",
-              (e.kind === "result" || e.kind === "info") && "text-secondary-label",
-            ]}>{label(e)}</span
-          >
-          <span class="p-subhead-2 ms-auto text-tertiary-label tabular-nums">{time(e.at)}</span>
-        </div>
-        {#if text}
-          {#if e.kind === "system" || e.kind === "reasoning"}
-            <details>
-              <summary class="p-subhead-2 cursor-default text-secondary-label">Afficher</summary>
-              <pre class="p-subhead-2 mt-1 font-mono whitespace-pre-wrap text-secondary-label select-text">{text}</pre>
-            </details>
-          {:else}
-            <pre
-              class={[
-                "p-subhead-2 overflow-x-auto font-mono whitespace-pre-wrap select-text",
-                e.kind === "result" && "text-secondary-label",
-              ]}>{long && !unfolded[i] ? text.slice(0, FOLD) + "…" : text}</pre>
-            {#if long}
-              <button
-                type="button"
-                class="p-subhead-2 self-start text-(--p-sys-blue)"
-                onclick={() => (unfolded[i] = !unfolded[i])}
-              >
-                {unfolded[i] ? "Replier" : `Tout afficher (${text.length} caractères)`}
-              </button>
-            {/if}
-          {/if}
-        {/if}
-      </div>
-    {:else}
-      <p class="p-body py-4 text-center text-tertiary-label">Rien pour l'instant.</p>
-    {/each}
-  </FormGroup>
+  <JobChat {events} live={current.state === "running" || current.state === "queued"} />
+
+  {#if !atBottom}
+    <div class="pointer-events-none sticky bottom-0 flex justify-end pt-2">
+      <Button
+        class="pointer-events-auto rounded-full! bg-window! shadow-md"
+        size="small"
+        aria-label="Aller tout en bas"
+        title="Aller tout en bas"
+        onclick={() => toBottom("smooth")}
+      >
+        <ArrowDownIcon size={14} aria-hidden="true" />
+        Tout en bas
+      </Button>
+    </div>
+  {/if}
 {:else}
   <FormGroup
     title="Jobs ({active.length})"

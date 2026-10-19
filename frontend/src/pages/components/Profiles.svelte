@@ -19,6 +19,7 @@
     Select,
     Spinner,
     Stepper,
+    Switch,
     TextArea,
     TextField,
   } from "$lib/ui";
@@ -45,6 +46,8 @@
     extraArgs: string;
     maxTurns: number;
     maxMinutes: number;
+    unlimitedTurns: boolean;
+    unlimitedTime: boolean;
   };
 
   const TRIGGERS: { value: Trigger; label: string }[] = [
@@ -89,6 +92,8 @@
       extraArgs: "",
       maxTurns: 50,
       maxMinutes: 30,
+      unlimitedTurns: false,
+      unlimitedTime: false,
     };
   }
 
@@ -112,6 +117,8 @@
       extraArgs: text(v.extraArgs),
       maxTurns: count(v.maxTurns, 50),
       maxMinutes: count(v.maxMinutes, 30),
+      unlimitedTurns: v.unlimitedTurns === true,
+      unlimitedTime: v.unlimitedTime === true,
     };
   }
 
@@ -363,11 +370,40 @@
         />
       </FormRow>
       <FormRow label="Tours max par job" for="profile-{p.id}-turns">
-        <Stepper id="profile-{p.id}-turns" class="me-7 w-20" min={5} max={500} step={5} bind:value={p.maxTurns} />
+        <div class="me-7 flex items-center gap-3">
+          <Switch label="Sans limite de tours" bind:checked={p.unlimitedTurns} />
+          <span class="p-subhead-2 text-secondary-label">Sans limite</span>
+          <Stepper
+            id="profile-{p.id}-turns"
+            class="w-20"
+            min={5}
+            max={2000}
+            step={5}
+            disabled={p.unlimitedTurns}
+            bind:value={p.maxTurns}
+          />
+        </div>
       </FormRow>
       <FormRow label="Durée max par job (minutes)" for="profile-{p.id}-minutes">
-        <Stepper id="profile-{p.id}-minutes" class="me-7 w-20" min={5} max={600} step={5} bind:value={p.maxMinutes} />
+        <div class="me-7 flex items-center gap-3">
+          <Switch label="Sans limite de durée" bind:checked={p.unlimitedTime} />
+          <span class="p-subhead-2 text-secondary-label">Sans limite</span>
+          <Stepper
+            id="profile-{p.id}-minutes"
+            class="w-20"
+            min={5}
+            max={1440}
+            step={5}
+            disabled={p.unlimitedTime}
+            bind:value={p.maxMinutes}
+          />
+        </div>
       </FormRow>
+      {#if p.unlimitedTurns && p.unlimitedTime}
+        <p class="p-form-row p-subhead-2 py-2.5 text-secondary-label">
+          Sans aucune limite, un job ne s'arrête que quand le modèle appelle finish, ou sur Annuler dans la page État.
+        </p>
+      {/if}
       <FormRow label="Déclencheur">
         <SegmentedControl label="Déclencheur" class="me-7" options={TRIGGERS} bind:value={p.trigger} />
       </FormRow>

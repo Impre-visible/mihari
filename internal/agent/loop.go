@@ -13,7 +13,7 @@ import (
 type Config struct {
 	URL   string
 	Model string
-	// Model calls before the job fails.
+	// Model calls and time before the job fails; 0 lifts the limit.
 	MaxTurns int
 	Timeout  time.Duration
 	// Context window of one job, in tokens.
@@ -47,8 +47,11 @@ const maxIdleAnswers = 3
 // Run lets the model work on task until it calls finish. Messages arriving on
 // inbox, such as replies in the thread, are handed over after the next tool call.
 func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <-chan Event, emit func(Event)) (Outcome, error) {
-	ctx, cancel := context.WithTimeout(ctx, cfg.Timeout)
-	defer cancel()
+	if cfg.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout)
+		defer cancel()
+	}
 	say := func(kind, title, text string) {
 		emit(Event{At: time.Now(), Kind: kind, Title: title, Text: text})
 	}
@@ -68,7 +71,7 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 		return o
 	}
 	for turn := 1; ; turn++ {
-		if turn > cfg.MaxTurns {
+		if cfg.MaxTurns > 0 && turn > cfg.MaxTurns {
 			return out(Outcome{Turns: turn - 1}), fmt.Errorf("limite de %d tours atteinte", cfg.MaxTurns)
 		}
 		messages = fitContext(messages, cfg.ContextTokens, charsPerToken)

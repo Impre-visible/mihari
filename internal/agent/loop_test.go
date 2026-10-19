@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -144,5 +145,24 @@ func TestSuggestion(t *testing.T) {
 	}
 	if _, _, err := suggestion(suggestArgs{StartLine: 5, EndLine: 2}); err == nil {
 		t.Error("reversed range should fail")
+	}
+}
+
+func TestRunWithoutLimits(t *testing.T) {
+	script := [][]map[string]any{}
+	for i := range 12 {
+		script = append(script, []map[string]any{call(fmt.Sprint(i), "list_files", map[string]any{})})
+	}
+	script = append(script, []map[string]any{call("end", "finish", map[string]any{"success": true, "summary": "Fini."})})
+	srv, _ := scriptedModel(t, script)
+
+	// 0 lifts both limits: thirteen turns, no deadline.
+	out, err := Run(context.Background(), Config{URL: srv.URL, Model: "m"},
+		&Env{Kind: KindPing, Runner: &fakeRunner{}}, "système", "tâche", nil, func(Event) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !out.Success || out.Turns != 13 {
+		t.Errorf("outcome %+v", out)
 	}
 }

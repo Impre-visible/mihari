@@ -165,16 +165,24 @@ func (c *Client) Reply(ctx context.Context, t Target, discussionID, body string)
 	return Note{ID: n.ID, Body: body, Author: c.Bot}, err
 }
 
-// React adds an emoji and returns the award to remove it later.
-func (c *Client) React(ctx context.Context, t Target, emoji string) (int, error) {
+// React adds an emoji to the comment noteID, or to the merge request or issue
+// itself when noteID is 0, and returns the award to remove it later.
+func (c *Client) React(ctx context.Context, t Target, noteID int, emoji string) (int, error) {
 	var award struct {
 		ID int `json:"id"`
 	}
-	_, err := send(ctx, http.MethodPost, c.base, c.token, c.path(t, "/award_emoji"), url.Values{"name": {emoji}}, nil, &award)
+	_, err := send(ctx, http.MethodPost, c.base, c.token, c.awards(t, noteID, ""), url.Values{"name": {emoji}}, nil, &award)
 	return award.ID, err
 }
 
-func (c *Client) Unreact(ctx context.Context, t Target, awardID int) error {
-	_, err := call(ctx, http.MethodDelete, c.base, c.token, c.path(t, "/award_emoji/"+strconv.Itoa(awardID)), nil, nil)
+func (c *Client) Unreact(ctx context.Context, t Target, noteID, awardID int) error {
+	_, err := call(ctx, http.MethodDelete, c.base, c.token, c.awards(t, noteID, "/"+strconv.Itoa(awardID)), nil, nil)
 	return err
+}
+
+func (c *Client) awards(t Target, noteID int, rest string) string {
+	if noteID != 0 {
+		return c.path(t, "/notes/"+strconv.Itoa(noteID)+"/award_emoji"+rest)
+	}
+	return c.path(t, "/award_emoji"+rest)
 }
