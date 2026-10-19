@@ -23,7 +23,7 @@
       console.error("CompleteOnboarding:", err);
     }
     nav.wizard = false;
-    nav.section = "status";
+    nav.section = "activity";
     route = "main";
   }
 
