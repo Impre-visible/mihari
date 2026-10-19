@@ -5,9 +5,14 @@
     Overview,
     Recommendation,
   } from "../../../bindings/github.com/Impre-visible/mihari/internal/advisor/models";
-  import { Service as Settings } from "../../../bindings/github.com/Impre-visible/mihari/internal/settings";
   import { FormGroup, FormRow, Select, Spinner, SteppedSlider, Stepper } from "$lib/ui";
   import { CONTEXT_STEPS, tokens } from "$lib/context";
+  import { agent, reload } from "./store.svelte";
+
+  // The hardware, and the catalog's models that fit it, best first; one
+  // applies to a profile, or makes a new one.
+  type Props = { onapplied: (profileId: string | null) => void };
+  let { onapplied }: Props = $props();
 
   type Status =
     | { kind: "idle" }
@@ -26,7 +31,7 @@
   let status = $state<Status>({ kind: "idle" });
   // Quantization picked per model, by Ref; the best one until changed.
   let picked = $state<Record<string, string>>({});
-  let profiles = $state<{ id: string; name: string }[]>([]);
+  let profiles = $derived(agent.profiles.filter((p) => p.name.trim() !== ""));
 
   let applyOptions = $derived([
     { value: "", label: "Appliquer à…", disabled: true },
@@ -37,19 +42,6 @@
   Advisor.Machine()
     .then((m) => (machine = m))
     .catch((err) => (error = errorMessage(err)));
-  loadProfiles();
-
-  function loadProfiles() {
-    Settings.GetConfig().then((config) => {
-      const stored = Array.isArray(config?.profiles) ? config.profiles : [];
-      profiles = stored
-        .filter((p: unknown): p is { id: string; name: string } => {
-          const v = p as Record<string, unknown>;
-          return typeof v?.id === "string" && typeof v?.name === "string";
-        })
-        .map((p: { id: string; name: string }) => ({ id: p.id, name: p.name }));
-    });
-  }
 
   // Recomputed shortly after the settings stop changing, not on every step.
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -100,24 +92,27 @@
     if (!target) return;
     status = { kind: "busy", label: "Application…" };
     try {
+      const before = new Set(agent.profiles.map((p) => p.id));
       await Advisor.Apply(target === NEW_PROFILE ? "" : target, r, jobs, contextPerJob);
       const name = target === NEW_PROFILE ? r.model : (profiles.find((p) => p.id === target)?.name ?? "");
-      status = { kind: "ok", message: `${r.model} ${r.quant} appliqué à ${name}. Télécharge-le depuis Profils.` };
-      loadProfiles();
+      status = { kind: "ok", message: `${r.model} ${r.quant} appliqué à ${name}. Télécharge-le depuis le profil.` };
+      await reload();
+      onapplied(target === NEW_PROFILE ? (agent.profiles.find((p) => !before.has(p.id))?.id ?? null) : target);
     } catch (err) {
       status = { kind: "error", message: errorMessage(err) };
     }
   }
 </script>
 
-<p class="p-body text-secondary-label">
-  Le matériel détecté et les modèles qui y tiennent, du meilleur au plus léger.
-</p>
+<header class="mb-2">
+  <h2 class="p-title-2 font-semibold">Machine</h2>
+  <p class="p-subhead-2 text-secondary-label">Le matériel détecté et les modèles qui y tiennent, du meilleur au plus léger.</p>
+</header>
 
 {#if machine}
   {@const h = machine.hardware}
   {@const b = machine.budget}
-  <FormGroup title="Machine" class="mt-6">
+  <FormGroup title="Matériel" class="mt-4">
     <FormRow label="Processeur" detail="{h.cpu || h.arch} · {h.cores} cœurs" />
     {#if h.unified}
       <FormRow label="Mémoire unifiée" detail={size(h.ram)} />

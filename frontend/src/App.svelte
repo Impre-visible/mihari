@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Service as Settings } from "../bindings/github.com/Impre-visible/mihari/internal/settings";
   import Main from "./pages/Main.svelte";
-  import Welcome from "./pages/Welcome.svelte";
-  import Wizard from "./pages/Wizard.svelte";
+  import Welcome from "./pages/wizard/Welcome.svelte";
+  import Wizard from "./pages/wizard/Wizard.svelte";
   import { nav } from "$lib/nav.svelte";
 
   type Route = "loading" | "welcome" | "wizard" | "main";
@@ -23,7 +23,7 @@
       console.error("CompleteOnboarding:", err);
     }
     nav.wizard = false;
-    nav.section = "status";
+    nav.section = "activity";
     route = "main";
   }
 

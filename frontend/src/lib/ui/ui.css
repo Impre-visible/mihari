@@ -105,3 +105,16 @@
   text-align: start;
   width: 100%;
 }
+
+/* ------------------------------------------------------------ Stepper */
+
+/* Puppertino's field is width: 100%, which squeezes the arrows out of a
+   sized stepper: the field takes what is left of the width instead. */
+.p-stepper-field > .p-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.p-stepper-field > .p-stepper {
+  flex-shrink: 0;
+}

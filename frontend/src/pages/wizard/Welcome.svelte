@@ -1,6 +1,6 @@
 <script lang="ts">
   import { GitMergeIcon, ShieldCheckIcon, TestTubeIcon } from "phosphor-svelte";
-  import { Service as Updates } from "../../bindings/github.com/Impre-visible/mihari/internal/updates";
+  import { Service as Updates } from "../../../bindings/github.com/Impre-visible/mihari/internal/updates";
   import { AppWindow, Button } from "$lib/ui";
   import logo from "$lib/logo-icon.svg";
 

@@ -8,6 +8,7 @@
   import { Service as Settings } from "../../../bindings/github.com/Impre-visible/mihari/internal/settings";
   import { Button, FormGroup, FormRow, Spinner, Switch, TextField } from "$lib/ui";
   import { nav } from "$lib/nav.svelte";
+  import { debounced, save } from "$lib/save.svelte";
 
   let autostart = $state(true);
   let devBuild = $state(false);
@@ -34,8 +35,9 @@
 
   // Web search: a SearXNG instance, DuckDuckGo without one.
 
+  // Saved as typed, once the address looks right.
   let searxng = $state("");
-  let searxngSaved = $state("");
+  let searxngSaved = "";
   let searxngError = $state<string | null>(null);
 
   // Not Settings.Get: Wails serializes a nil result as {}, not null.
@@ -43,20 +45,17 @@
     searxng = searxngSaved = typeof config?.searxng_url === "string" ? config.searxng_url : "";
   });
 
-  async function saveSearxng() {
-    searxngError = null;
+  const saveSearxng = debounced(async () => {
     const value = searxng.trim();
     if (value && !/^https?:\/\/[^/]+/.test(value)) {
       searxngError = "Adresse http(s) attendue, par exemple http://searxng.lan:8080.";
       return;
     }
-    try {
-      await Settings.Set("searxng_url", value);
-      searxng = searxngSaved = value;
-    } catch (err) {
-      searxngError = messageOf(err);
-    }
-  }
+    searxngError = null;
+    if (value === searxngSaved) return;
+    searxngError = await save(() => Settings.Set("searxng_url", value));
+    if (!searxngError) searxngSaved = value;
+  }, 800);
 
   // Discord
 
@@ -113,21 +112,14 @@
     );
 
   async function toggle() {
-    error = null;
-    try {
-      await Desktop.SetAutostart(autostart);
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
-      autostart = !autostart;
-    }
+    error = await save(() => Desktop.SetAutostart(autostart));
+    if (error) autostart = !autostart;
   }
 </script>
 
-<p class="p-body text-secondary-label">Comment Mihari tourne sur cette machine.</p>
-
+<div class="mx-auto max-w-[620px]">
 <FormGroup
   title="Arrière-plan"
-  class="mt-6"
   footer={devBuild
     ? "Build de développement : le lancement à l'ouverture de session n'est jamais enregistré."
     : "Fermer la fenêtre laisse Mihari tourner dans la barre de menus. Quitter se fait depuis son icône."}
@@ -159,13 +151,20 @@
   footer="L'agent cherche sur DuckDuckGo depuis le container du job. Avec une instance SearXNG (format json activé), il l'utilise à la place : plus fiable. Elle doit être joignable depuis les containers."
 >
   <FormRow label="Instance SearXNG" for="general-searxng">
-    <div class="flex items-center gap-2">
-      <TextField id="general-searxng" class="w-60" placeholder="http://searxng.lan:8080" bind:value={searxng} />
-      <Button size="small" disabled={searxng.trim() === searxngSaved} onclick={saveSearxng}>Enregistrer</Button>
-    </div>
+    <TextField
+      id="general-searxng"
+      class="w-64"
+      placeholder="http://searxng.lan:8080"
+      aria-invalid={searxngError ? "true" : undefined}
+      bind:value={searxng}
+      oninput={saveSearxng}
+    />
   </FormRow>
   {#if searxngError}
-    <p class="p-form-row p-subhead-2 py-2.5 text-label select-text">{searxngError}</p>
+    <p class="p-form-row p-subhead-2 flex items-center gap-1.5 py-2 text-label select-text">
+      <WarningCircleIcon size={14} weight="fill" class="shrink-0 text-(--p-sys-red)" aria-hidden="true" />
+      {searxngError}
+    </p>
   {/if}
 </FormGroup>
 
@@ -177,36 +176,39 @@
     <TextField
       id="general-discord"
       type="password"
-      class="w-72"
+      class="w-64"
       placeholder="https://discord.com/api/webhooks/…"
       bind:value={webhook}
       oninput={() => discordStatus.kind !== "busy" && (discordStatus = { kind: "idle" })}
     />
   </FormRow>
-</FormGroup>
-
-<div class="mt-4 flex items-center gap-2">
-  <p class="p-subhead-2 flex min-w-0 flex-1 items-center gap-1.5" role="status">
-    {#if discordStatus.kind === "busy"}
-      <Spinner small label={discordStatus.label} />
-      <span class="text-secondary-label">{discordStatus.label}</span>
-    {:else if discordStatus.kind === "ok"}
-      <CheckCircleIcon size={16} weight="fill" class="shrink-0 text-(--p-sys-green)" aria-hidden="true" />
-      <span class="text-secondary-label">{discordStatus.message}</span>
-    {:else if discordStatus.kind === "error"}
-      <WarningCircleIcon size={16} weight="fill" class="shrink-0 text-(--p-sys-red)" aria-hidden="true" />
-      <span class="text-label select-text">{discordStatus.message}</span>
+  <div class="p-form-row gap-2">
+    <p class="p-subhead-2 flex min-w-0 flex-1 items-center gap-1.5" role="status">
+      {#if discordStatus.kind === "busy"}
+        <Spinner small label={discordStatus.label} />
+        <span class="text-secondary-label">{discordStatus.label}</span>
+      {:else if discordStatus.kind === "ok"}
+        <CheckCircleIcon size={16} weight="fill" class="shrink-0 text-(--p-sys-green)" aria-hidden="true" />
+        <span class="text-secondary-label">{discordStatus.message}</span>
+      {:else if discordStatus.kind === "error"}
+        <WarningCircleIcon size={16} weight="fill" class="shrink-0 text-(--p-sys-red)" aria-hidden="true" />
+        <span class="text-label select-text">{discordStatus.message}</span>
+      {:else}
+        <span class="text-secondary-label">{webhook === MASK ? "Enregistré dans le trousseau." : "Pas de notifications."}</span>
+      {/if}
+    </p>
+    {#if webhook === MASK}
+      <Button size="small" variant="borderless" disabled={discordStatus.kind === "busy"} onclick={removeDiscord}>Retirer</Button>
     {/if}
-  </p>
-  {#if webhook === MASK}
-    <Button variant="borderless" disabled={discordStatus.kind === "busy"} onclick={removeDiscord}>Retirer</Button>
-  {/if}
-  <Button disabled={webhook === "" || discordStatus.kind === "busy"} onclick={testDiscord}>Tester</Button>
-  <Button
-    variant="primary"
-    disabled={webhook === "" || webhook === MASK || discordStatus.kind === "busy"}
-    onclick={saveDiscord}
-  >
-    Enregistrer
-  </Button>
+    <Button size="small" disabled={webhook === "" || discordStatus.kind === "busy"} onclick={testDiscord}>Tester</Button>
+    <Button
+      size="small"
+      variant="primary"
+      disabled={webhook === "" || webhook === MASK || discordStatus.kind === "busy"}
+      onclick={saveDiscord}
+    >
+      Enregistrer
+    </Button>
+  </div>
+</FormGroup>
 </div>
