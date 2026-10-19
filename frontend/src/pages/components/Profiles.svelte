@@ -18,13 +18,14 @@
     SegmentedControl,
     Select,
     Spinner,
+    SteppedSlider,
     Stepper,
     Switch,
     TextArea,
     TextField,
   } from "$lib/ui";
   import { PROMPT_PRESETS } from "./prompts";
-  import ContextSlider from "./ContextSlider.svelte";
+  import { CONTEXT_STEPS, tokens } from "$lib/context";
 
   type Status =
     | { kind: "idle" }
@@ -354,7 +355,13 @@
         <Stepper id="profile-{p.id}-jobs" class="me-7 w-20" min={1} max={64} step={1} bind:value={p.maxJobs} />
       </FormRow>
       <FormRow label="Contexte par job (tokens)" for="profile-{p.id}-context">
-        <ContextSlider id="profile-{p.id}-context" class="me-7" bind:value={p.contextPerJob} />
+        <SteppedSlider
+          id="profile-{p.id}-context"
+          class="me-7"
+          steps={CONTEXT_STEPS}
+          format={tokens}
+          bind:value={p.contextPerJob}
+        />
       </FormRow>
       <FormRow label="Arguments du moteur" for="profile-{p.id}-args">
         <TextField
