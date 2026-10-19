@@ -4,13 +4,13 @@
   import { AppWindow, Button } from "$lib/ui";
   import Gitlab from "./components/Gitlab.svelte";
   import Projects from "./components/Projects.svelte";
-  import Machine from "./components/Machine.svelte";
-  import Profiles from "./components/Profiles.svelte";
-  import Schedule from "./components/Schedule.svelte";
+  import Agent from "./agent/Agent.svelte";
+  import Machine from "./agent/MachineInspector.svelte";
 
   let { ondone }: { ondone: () => void } = $props();
 
-  type Step = { title: string; hint: string; component: Component };
+  // framed: a page in list + inspector, shown in a box of its own.
+  type Step = { title: string; hint: string; component: Component<any>; framed?: boolean };
 
   // The settings pages themselves, in the order a first setup needs them.
   // Each saves on its own, so any step can be skipped and done later.
@@ -32,13 +32,9 @@
     },
     {
       title: "Règle le profil",
-      hint: "Charge un prompt prêt, télécharge le modèle avec l'icône à côté de son nom, puis enregistre.",
-      component: Profiles,
-    },
-    {
-      title: "Planifie",
-      hint: "Dis quand le profil tourne, puis enregistre.",
-      component: Schedule,
+      hint: "Charge un prompt prêt, télécharge le modèle avec l'icône à côté de son nom, et donne-lui ses heures. Tout s'enregistre seul.",
+      component: Agent,
+      framed: true,
     },
   ];
 
@@ -73,7 +69,14 @@
 
     <div class="mt-6">
       {#key index}
-        <step.component />
+        {#if step.framed}
+          <!-- The padding is the window content's, which the page's layout expects. -->
+          <div class="h-[560px] overflow-hidden rounded-xl border border-separator px-[24px] pt-[20px] pb-[24px]">
+            <step.component />
+          </div>
+        {:else}
+          <step.component onapplied={() => {}} />
+        {/if}
       {/key}
     </div>
 
