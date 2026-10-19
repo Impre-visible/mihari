@@ -1,5 +1,6 @@
 // Package sandbox runs an agent's commands in a throwaway container, with the
-// job's repository mounted at /workspace and no GitLab credentials inside.
+// job's repository at /workspace (mounted, or copied for a remote Docker) and
+// no GitLab credentials inside.
 package sandbox
 
 import (
@@ -133,9 +134,12 @@ func (r runtimeCLI) ready(ctx context.Context) error {
 // Spec describes the container a job gets.
 type Spec struct {
 	Image string
-	// Host directory mounted read-write at Workdir.
+	// Host directory mounted read-write at Workdir, or copied there for a
+	// Docker on another machine.
 	Workspace string
-	Env       []string
+	// Copies Workspace even where it could be mounted.
+	Copy bool
+	Env  []string
 	// Names a dependency cache kept across jobs at CacheDir, one per
 	// project; "" for none.
 	Cache string
@@ -204,6 +208,10 @@ func ClearCache(ctx context.Context, name string) error {
 type Container struct {
 	cli  runtimeCLI
 	name string
+	// The host folder of the repository.
+	workspace string
+	// The repository is a copy inside the container, not a mount of workspace.
+	copied bool
 }
 
 // Start pulls the image if needed and starts an idle container to exec into.
@@ -221,8 +229,11 @@ func Start(ctx context.Context, spec Spec) (*Container, error) {
 	}
 
 	name := "mihari-" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	args := []string{"run", "--detach", "--rm", "--name", name,
-		"--volume", workspace + ":" + Workdir, "--workdir", Workdir}
+	copied := spec.Copy || cli.remoteDocker(ctx)
+	args := []string{"run", "--detach", "--rm", "--name", name, "--workdir", Workdir}
+	if !copied {
+		args = append(args, "--volume", workspace+":"+Workdir)
+	}
 	if cli.kind == Docker {
 		// --init reaps the zombies agents' commands leave; no-new-privileges blocks setuid escalation.
 		args = append(args, "--init", "--security-opt", "no-new-privileges", "--pids-limit", "4096")
@@ -251,7 +262,14 @@ func Start(ctx context.Context, spec Spec) (*Container, error) {
 		}
 		return nil, fmt.Errorf("démarrage du container (%s) : %s", spec.Image, msg)
 	}
-	return &Container{cli: cli, name: name}, nil
+	c := &Container{cli: cli, name: name, workspace: workspace, copied: copied}
+	if copied {
+		if err := c.copyIn(startCtx); err != nil {
+			_ = c.Close()
+			return nil, err
+		}
+	}
+	return c, nil
 }
 
 // Result is what a command printed and how it ended.
@@ -309,6 +327,26 @@ func clip(s string) (string, bool) {
 	}
 	half := outputLimit / 2
 	return s[:half] + "\n… [" + strconv.Itoa(len(s)-outputLimit) + " octets coupés] …\n" + s[len(s)-half:], true
+}
+
+// Collect brings the agent's work to the host folder, where Mihari commits
+// it: the files themselves when the repository is a copy, their owner when
+// it is mounted.
+func (c *Container) Collect(ctx context.Context) error {
+	if c.copied {
+		return c.pull(ctx)
+	}
+	c.Chown(ctx)
+	return nil
+}
+
+// Committed tells a copied repository about the commit Mihari just made on
+// the host; a mounted one already sees it.
+func (c *Container) Committed(ctx context.Context) error {
+	if c.copied {
+		return c.pushGit(ctx)
+	}
+	return nil
 }
 
 // Chown hands the workspace back to the user. Docker on Linux writes the

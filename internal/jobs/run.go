@@ -245,7 +245,9 @@ func (s *Service) findThread(ctx context.Context, j *job, env *agent.Env) {
 
 // push commits the workspace as the bot, crediting who asked, and pushes it.
 func (s *Service) push(ctx context.Context, client *gitlab.Client, c *sandbox.Container, repo, branch, message, requester string) (string, error) {
-	c.Chown(ctx)
+	if err := c.Collect(ctx); err != nil {
+		return "", err
+	}
 	bot, err := client.Identity(ctx, client.Bot)
 	if err != nil {
 		return "", err
@@ -253,7 +255,14 @@ func (s *Service) push(ctx context.Context, client *gitlab.Client, c *sandbox.Co
 	if who, err := client.Identity(ctx, requester); err == nil && requester != client.Bot {
 		message = strings.TrimSpace(message) + fmt.Sprintf("\n\nCo-authored-by: %s <%s>", who.Name, who.Email)
 	}
-	return gitlab.Push(ctx, repo, branch, message, bot)
+	sha, err := gitlab.Push(ctx, repo, branch, message, bot)
+	if err != nil {
+		return "", err
+	}
+	if err := c.Committed(ctx); err != nil {
+		log.Printf("push %s: %v", branch, err)
+	}
+	return sha, nil
 }
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
