@@ -205,6 +205,16 @@ func TestTodoWrite(t *testing.T) {
 	if env.ClosePlan(context.Background()) != "" {
 		t.Error("the answer already shows the plan")
 	}
+
+	// A job that ends well ticks the step still under way in the answer.
+	env = &agent.Env{DryRun: true, Target: gitlab.Target{Type: gitlab.IssueTarget, IID: 3}}
+	_, _ = run(t, env, "todo_write", map[string]any{"todos": []map[string]string{
+		{"content": "Lire", "status": "completed"}, {"content": "Répondre", "status": "in_progress"}, {"content": "Plus tard", "status": "pending"}}})
+	_, _ = run(t, env, "reply", map[string]any{"body": "Fait."})
+	_, _ = run(t, env, "finish", map[string]any{"success": true, "summary": "ok"})
+	if last := env.Posts[len(env.Posts)-1]; last.Body != "**Plan**\n\n- [x] Lire\n- [x] Répondre\n- [ ] Plus tard\n\nFait." {
+		t.Errorf("after finish: %q", last.Body)
+	}
 }
 
 func TestAskUser(t *testing.T) {
