@@ -17,6 +17,8 @@ const (
 	webDir   = "/tmp/mihari/web"
 	webLimit = 2 << 20
 	agentUA  = "Mozilla/5.0 (X11; Linux x86_64) Mihari"
+	// SearXNG's bot detection, among others, turns away a request without it.
+	acceptLanguage = "Accept-Language: fr-FR,fr;q=0.9,en;q=0.8"
 )
 
 type page struct {
@@ -32,8 +34,8 @@ func fetch(ctx context.Context, env *agent.Env, u string) (page, error) {
 		return page{}, fmt.Errorf("URL invalide : %q (http ou https)", u)
 	}
 	file := fmt.Sprintf("%s/%d", webDir, time.Now().UnixNano())
-	cmd := needs("curl") + fmt.Sprintf("mkdir -p %s && curl -sSL --compressed --max-time 30 --max-filesize %d -A %s -o %s -w '%%{http_code} %%{content_type}' %s",
-		webDir, webLimit, quote(agentUA), file, quote(parsed.String()))
+	cmd := needs("curl") + fmt.Sprintf("mkdir -p %s && curl -sSL --compressed --max-time 30 --max-filesize %d -A %s -H %s -o %s -w '%%{http_code} %%{content_type}' %s",
+		webDir, webLimit, quote(agentUA), quote(acceptLanguage), file, quote(parsed.String()))
 	out, err := output(ctx, env, cmd, nil, 45*time.Second)
 	if err != nil {
 		return page{}, err

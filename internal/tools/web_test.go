@@ -61,7 +61,7 @@ func TestWebFetch(t *testing.T) {
 	if err != nil || out != "https://example.com (HTTP 200, text/html; charset=utf-8)\n\nBonjour" {
 		t.Fatalf("got %q, %v", out, err)
 	}
-	if !strings.Contains(runner.commands[0], "command -v curl") {
+	if !strings.Contains(runner.commands[0], "command -v curl") || !strings.Contains(runner.commands[0], "Accept-Language") {
 		t.Errorf("no hint when curl is missing: %q", runner.commands[0])
 	}
 	if _, err := run(t, &agent.Env{Runner: runner}, "web_fetch", map[string]any{"url": "file:///etc/passwd"}); err == nil {

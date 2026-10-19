@@ -72,8 +72,14 @@ func searchSearXNG(ctx context.Context, env *agent.Env, instance, query string) 
 	if err != nil {
 		return nil, err
 	}
-	if p.Status != 200 {
-		return nil, fmt.Errorf("SearXNG a répondu %d (le format json doit être activé dans son settings.yml)", p.Status)
+	switch p.Status {
+	case 200:
+	case 403:
+		return nil, fmt.Errorf("SearXNG a répondu 403 : active le format json dans son settings.yml (search.formats: [html, json])")
+	case 429:
+		return nil, fmt.Errorf("SearXNG a répondu 429 : son limiteur bloque Mihari. Désactive-le (server.limiter: false dans settings.yml) ou ajoute l'adresse des containers à pass_ip dans limiter.toml")
+	default:
+		return nil, fmt.Errorf("SearXNG a répondu %d", p.Status)
 	}
 	return parseSearXNG(p.Body)
 }
