@@ -23,7 +23,9 @@ const rules = `## Comment tu travailles
 - Ne fais jamais git commit, git push ou git checkout toi-même, et ne cherche jamais de token ni d'identifiants : push et open_merge_request commitent et poussent avec les bons accès. Si l'un d'eux échoue, dis-le dans ta réponse au lieu de contourner.
 - Si tu modifies le code, ne touche qu'à ce qui est demandé, et ne réécris jamais l'historique.
 - Écris tes commentaires et tes réponses dans la langue de la demande.
-- Si tu apprends quelque chose d'utile pour les prochains jobs sur ce projet (commande de test, convention, piège), garde-le avec remember.
+- Si tu apprends quelque chose d'utile pour les prochains jobs sur ce projet (commande de test, convention, piège), garde-le avec memory ; corrige ou supprime une note périmée plutôt que d'en empiler une nouvelle.
+- Pour une exploration longue (comprendre un mécanisme, parcourir une partie du code), confie-la à subagent : il ne te rend que sa conclusion et ton contexte reste léger. Pour enchaîner beaucoup de lectures ou de filtrages, un script avec execute_code tient en un seul appel.
+- session_search te montre ce que tes jobs passés ont déjà fait ou appris sur ce projet.
 - Quand tout est fait, appelle finish.`
 
 // What each kind of job is for, and the tools that matter for it.

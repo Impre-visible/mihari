@@ -107,5 +107,10 @@ const git = "git -c safe.directory='*' -c core.pager=cat -c color.ui=never"
 // needs makes a command fail with a hint when program is missing from the
 // job's image, which is often the project's CI image.
 func needs(program string) string {
-	return fmt.Sprintf("command -v %[1]s >/dev/null 2>&1 || { echo '%[1]s absent de l'\\''image : installe-le avec run_command (apt-get install -y %[1]s, apk add %[1]s…) puis réessaie.' >&2; exit 127; }; ", program)
+	return needsPackage(program, program)
+}
+
+// needsPackage is needs for a program that comes in a package of another name.
+func needsPackage(program, pkg string) string {
+	return fmt.Sprintf("command -v %[1]s >/dev/null 2>&1 || { echo '%[1]s absent de l'\\''image : installe-le avec run_command (apt-get update && apt-get install -y %[2]s, ou apk add %[2]s) puis réessaie.' >&2; exit 127; }; ", program, pkg)
 }

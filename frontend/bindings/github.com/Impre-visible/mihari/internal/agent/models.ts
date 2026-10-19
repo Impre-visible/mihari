@@ -13,6 +13,11 @@ export interface Event {
     "kind": string;
     "title": string;
     "text": string;
+
+    /**
+     * Set on the lines of a subagent, which the chat shows inside its call.
+     */
+    "agent"?: string;
 }
 
 /**

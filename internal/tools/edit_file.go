@@ -43,7 +43,7 @@ func init() {
 				return "", err
 			}
 			return fmt.Sprintf("%s modifié à la ligne %d.", a.Path, line), nil
-		}))
+		}, agent.Writes()))
 }
 
 // replace swaps old for new in content and returns the line of the first change.

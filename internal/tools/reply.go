@@ -33,5 +33,5 @@ func init() {
 			}
 			env.Replied = true
 			return "Réponse postée.", nil
-		}, agent.When(hasTarget)))
+		}, agent.When(hasTarget), agent.Writes()))
 }

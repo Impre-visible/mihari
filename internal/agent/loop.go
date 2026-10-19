@@ -27,6 +27,8 @@ type Event struct {
 	Kind  string `json:"kind"`
 	Title string `json:"title"`
 	Text  string `json:"text"`
+	// Set on the lines of a subagent, which the chat shows inside its call.
+	Agent string `json:"agent,omitempty"`
 }
 
 // Outcome is how the loop ended.
@@ -57,6 +59,12 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 	}
 	if env.Inbox == nil {
 		env.Inbox = inbox
+	}
+	// A subagent gets no subagent of its own.
+	if !env.ReadOnly && env.Subagent == nil {
+		env.Subagent = func(ctx context.Context, task string) (string, error) {
+			return runSubagent(ctx, cfg, env, task, emit)
+		}
 	}
 	say := func(kind, title, text string) {
 		emit(Event{At: time.Now(), Kind: kind, Title: title, Text: text})
@@ -150,6 +158,12 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 			messages = append(messages, message{Role: "tool", ToolCallID: call.ID, Content: out})
 		}
 
+		// Images ride in a message of their own: a tool result is only text.
+		if len(env.Images) > 0 {
+			messages = append(messages, message{Role: "user", Content: "Image(s) chargée(s) par read_image :", Images: env.Images})
+			env.Images = nil
+		}
+
 		if env.Finished != nil {
 			return out(Outcome{Success: env.Finished.Success, Summary: env.Finished.Summary, Turns: turn}), nil
 		}
@@ -182,10 +196,14 @@ func drain(inbox <-chan Event) []Event {
 	}
 }
 
+// What an image weighs in size, whatever its bytes: engines count it in
+// tokens by its pixels, not its encoding.
+const imageSize = 4000
+
 func size(messages []message) int {
 	n := 0
 	for _, m := range messages {
-		n += len(m.Content)
+		n += len(m.Content) + len(m.Images)*imageSize
 		for _, c := range m.ToolCalls {
 			n += len(c.Function.Arguments) + len(c.Function.Name)
 		}
@@ -203,9 +221,49 @@ func fitContext(messages []message, contextTokens int, charsPerToken float64) []
 	budget := int(float64(contextTokens) * 0.85 * charsPerToken)
 	keepFrom := max(2, len(messages)-4)
 	for i := 2; i < keepFrom && size(messages) > budget; i++ {
-		if messages[i].Role == "tool" && messages[i].Content != trimmed {
-			messages[i].Content = trimmed
+		switch m := &messages[i]; {
+		case m.Role == "tool" && m.Content != trimmed:
+			m.Content = trimmed
+		case len(m.Images) > 0:
+			m.Images, m.Content = nil, m.Content+" [image retirée pour libérer du contexte]"
 		}
 	}
 	return messages
+}
+
+// How many model calls a subagent gets before it must conclude.
+const subagentTurns = 30
+
+const subagentSystem = `Tu es un sous-agent de Mihari. Un autre agent t'a confié la tâche ci-dessous pour garder son propre contexte léger.
+
+- Tu peux lire, chercher, lancer des commandes et consulter le web et GitLab, mais pas modifier de fichier ni poster sur GitLab.
+- Va droit au but : quelques appels bien choisis valent mieux que tout parcourir.
+- Termine par finish : success à true si tu as trouvé, et dans summary ta conclusion complète et autonome (chemins, lignes, extraits, commandes), car c'est tout ce que l'autre agent verra.`
+
+// runSubagent runs task in a read-only loop of its own, with a fresh
+// context, and returns its conclusion. Its lines go to the job's transcript
+// marked as the subagent's.
+func runSubagent(ctx context.Context, cfg Config, parent *Env, task string, emit func(Event)) (string, error) {
+	child := &Env{
+		Kind: parent.Kind, Runner: parent.Runner, GitLab: parent.GitLab, Target: parent.Target,
+		MR: parent.MR, Issue: parent.Issue, ThreadID: parent.ThreadID, Requester: parent.Requester,
+		ReviewedSHA: parent.ReviewedSHA, PastJobs: parent.PastJobs, Notes: parent.Notes, Vision: parent.Vision,
+		ReadOnly: true,
+	}
+	sub := cfg
+	sub.MaxTurns, sub.Timeout = subagentTurns, 0
+	if cfg.MaxTurns > 0 {
+		sub.MaxTurns = min(sub.MaxTurns, cfg.MaxTurns)
+	}
+	out, err := Run(ctx, sub, child, subagentSystem, task, nil, func(e Event) {
+		e.Agent = "subagent"
+		emit(e)
+	})
+	if err != nil {
+		return "", fmt.Errorf("le sous-agent s'est arrêté : %w", err)
+	}
+	if !out.Success {
+		return "Le sous-agent n'a pas abouti : " + out.Summary, nil
+	}
+	return out.Summary, nil
 }

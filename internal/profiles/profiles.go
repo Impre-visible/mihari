@@ -42,6 +42,8 @@ type Profile struct {
 	MaxMinutes     int  `json:"maxMinutes"`
 	UnlimitedTurns bool `json:"unlimitedTurns"`
 	UnlimitedTime  bool `json:"unlimitedTime"`
+	// The model reads images, so jobs may hand it some (read_image).
+	Vision bool `json:"vision"`
 }
 
 // TurnLimit returns the most model calls a job may make, 0 for no limit.

@@ -50,6 +50,7 @@
     maxMinutes: number;
     unlimitedTurns: boolean;
     unlimitedTime: boolean;
+    vision: boolean;
   };
 
   const TRIGGERS: { value: Trigger; label: string }[] = [
@@ -96,6 +97,7 @@
       maxMinutes: 30,
       unlimitedTurns: false,
       unlimitedTime: false,
+      vision: false,
     };
   }
 
@@ -121,6 +123,7 @@
       maxMinutes: count(v.maxMinutes, 30),
       unlimitedTurns: v.unlimitedTurns === true,
       unlimitedTime: v.unlimitedTime === true,
+      vision: v.vision === true,
     };
   }
 
@@ -406,6 +409,12 @@
           Sans aucune limite, un job ne s'arrête que quand le modèle appelle finish, ou sur Annuler dans la page État.
         </p>
       {/if}
+      <FormRow label="Le modèle voit les images" for="profile-{p.id}-vision">
+        <Switch id="profile-{p.id}-vision" label="Le modèle voit les images" class="me-7" bind:checked={p.vision} />
+      </FormRow>
+      <p class="p-form-row p-subhead-2 py-2.5 text-secondary-label">
+        Donne à l'agent read_image : captures jointes aux issues, rendus de tests. Coche seulement si le modèle accepte des images.
+      </p>
       <FormRow label="Déclencheur">
         <SegmentedControl label="Déclencheur" class="me-7" options={TRIGGERS} bind:value={p.trigger} />
       </FormRow>

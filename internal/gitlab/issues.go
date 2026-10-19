@@ -3,8 +3,10 @@ package gitlab
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -220,4 +222,37 @@ func (c *Client) Search(ctx context.Context, kind TargetType, text, state string
 		out[i] = Found{IID: it.IID, Title: it.Title, State: it.State, Author: it.Author.Username, WebURL: it.WebURL}
 	}
 	return out, nil
+}
+
+var uploadLink = regexp.MustCompile(`^(?:https?://([^/]+))?(?:/[^?#]*)?/uploads/([0-9a-f]{32})/([^/?#]+)`)
+
+// Upload downloads a file attached to an issue, a merge request or a
+// comment, from its Markdown link: /uploads/<secret>/<name>, relative or on
+// this instance. ok is false for a link that is not one; GitLab no longer
+// serves these to anyone not signed in.
+func (c *Client) Upload(ctx context.Context, link string, limit int64) (data []byte, ok bool, err error) {
+	m := uploadLink.FindStringSubmatch(strings.TrimSpace(link))
+	if m == nil || (m[1] != "" && m[1] != c.base.Host) {
+		return nil, false, nil
+	}
+	name, err := url.PathUnescape(m[3])
+	if err != nil {
+		return nil, true, err
+	}
+	endpoint := c.base.JoinPath("api/v4/projects", strconv.Itoa(c.ProjectID), "uploads", m[2], name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return nil, true, err
+	}
+	req.Header.Set("PRIVATE-TOKEN", c.token)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, true, fmt.Errorf("instance injoignable : %w", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil, true, fmt.Errorf("pièce jointe %s : %s", name, res.Status)
+	}
+	data, err = io.ReadAll(io.LimitReader(res.Body, limit))
+	return data, true, err
 }

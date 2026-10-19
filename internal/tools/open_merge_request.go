@@ -26,5 +26,5 @@ func init() {
 			}
 			env.OpenedMR, env.MR = &mr, mr
 			return fmt.Sprintf("MR !%d ouverte en brouillon : %s", mr.IID, mr.WebURL), nil
-		}, agent.When(canOpenMR)))
+		}, agent.When(canOpenMR), agent.Writes()))
 }

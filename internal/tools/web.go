@@ -29,26 +29,65 @@ type page struct {
 
 // fetch downloads u in the container and reads it back whole.
 func fetch(ctx context.Context, env *agent.Env, u string) (page, error) {
+	p, file, err := download(ctx, env, u)
+	if err != nil {
+		return page{}, err
+	}
+	defer remove(ctx, env, file)
+	if p.Body, err = readFile(ctx, env, file, webLimit); err != nil {
+		return page{}, err
+	}
+	return p, nil
+}
+
+// fetchDocument is fetch for a page to read, where a PDF comes back as its
+// text, extracted by pdftotext in the container.
+func fetchDocument(ctx context.Context, env *agent.Env, u string) (page, error) {
+	p, file, err := download(ctx, env, u)
+	if err != nil {
+		return page{}, err
+	}
+	defer remove(ctx, env, file, file+".txt")
+	head, err := readFile(ctx, env, file, 5)
+	if err != nil {
+		return page{}, err
+	}
+	read := file
+	if strings.Contains(p.ContentType, "pdf") || head == "%PDF-" {
+		cmd := needsPackage("pdftotext", "poppler-utils") + fmt.Sprintf("pdftotext -layout -enc UTF-8 %s %s.txt", file, file)
+		if _, err := output(ctx, env, cmd, nil, 60*time.Second); err != nil {
+			return page{}, fmt.Errorf("PDF illisible : %w", err)
+		}
+		read, p.ContentType = file+".txt", p.ContentType+", converti en texte"
+	}
+	if p.Body, err = readFile(ctx, env, read, webLimit); err != nil {
+		return page{}, err
+	}
+	return p, nil
+}
+
+// download saves u to a file of the container and returns its status and type.
+func download(ctx context.Context, env *agent.Env, u string) (page, string, error) {
 	parsed, err := url.Parse(u)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return page{}, fmt.Errorf("URL invalide : %q (http ou https)", u)
+		return page{}, "", fmt.Errorf("URL invalide : %q (http ou https)", u)
 	}
 	file := fmt.Sprintf("%s/%d", webDir, time.Now().UnixNano())
 	cmd := needs("curl") + fmt.Sprintf("mkdir -p %s && curl -sSL --compressed --max-time 30 --max-filesize %d -A %s -H %s -o %s -w '%%{http_code} %%{content_type}' %s",
 		webDir, webLimit, quote(agentUA), quote(acceptLanguage), file, quote(parsed.String()))
 	out, err := output(ctx, env, cmd, nil, 45*time.Second)
 	if err != nil {
-		return page{}, err
+		return page{}, "", err
 	}
 	var p page
 	status, contentType, _ := strings.Cut(strings.TrimSpace(out), " ")
 	fmt.Sscan(status, &p.Status)
 	p.ContentType = contentType
-	if p.Body, err = readFile(ctx, env, file, webLimit); err != nil {
-		return page{}, err
-	}
-	_, _ = env.Runner.Exec(ctx, "rm -f "+file, nil, 10*time.Second)
-	return p, nil
+	return p, file, nil
+}
+
+func remove(ctx context.Context, env *agent.Env, files ...string) {
+	_, _ = env.Runner.Exec(ctx, "rm -f "+strings.Join(files, " "), nil, 10*time.Second)
 }
 
 func isHTML(p page, body string) bool {

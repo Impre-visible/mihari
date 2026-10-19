@@ -127,3 +127,12 @@ func TestRetriesPassingEngineFailures(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestFitContextDropsOldImages(t *testing.T) {
+	msgs := []message{{Role: "system"}, {Role: "user"}, {Role: "user", Content: "vue", Images: []string{"data:x", "data:y"}},
+		{Role: "assistant"}, {Role: "tool", Content: "a"}, {Role: "assistant"}, {Role: "tool", Content: "b"}}
+	fitContext(msgs, 1000, 3.5)
+	if msgs[2].Images != nil || !strings.Contains(msgs[2].Content, "image retirée") {
+		t.Errorf("old images should go: %+v", msgs[2])
+	}
+}
