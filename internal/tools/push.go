@@ -24,5 +24,5 @@ func init() {
 			}
 			env.Pushes = append(env.Pushes, sha)
 			return "Commit " + sha + " poussé.", nil
-		}, agent.When(canPush)))
+		}, agent.When(canPush), agent.Writes()))
 }

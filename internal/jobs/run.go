@@ -217,8 +217,11 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 	}
 
 	if !j.dry {
-		env.Remember = func(note string) error { return projects.Remember(j.ProjectID, note) }
+		env.Notes = func() string { return projects.Memory(j.ProjectID) }
+		env.SetNotes = func(notes string) error { return projects.SetMemory(j.ProjectID, notes) }
 	}
+	env.PastJobs = pastJobs(j.ProjectID, j.ID)
+	env.Vision = active.Profile.Vision
 	env.ReviewedSHA = j.reviewedSHA
 	j.systemPrompt = systemPrompt(active.Profile.Prompt, config.Project(j.ProjectID).Instructions, repo, projects.Memory(j.ProjectID))
 	j.taskPrompt = taskPrompt(j, env)

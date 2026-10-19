@@ -24,5 +24,5 @@ func init() {
 				return "", err
 			}
 			return fmt.Sprintf("%s déplacé vers %s.", a.From, a.To), nil
-		}))
+		}, agent.Writes()))
 }

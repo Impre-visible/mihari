@@ -30,5 +30,5 @@ func init() {
 				return "", err
 			}
 			return a.Path + " supprimé.", nil
-		}))
+		}, agent.Writes()))
 }

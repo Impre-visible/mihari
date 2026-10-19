@@ -13,9 +13,9 @@ type webFetchArgs struct {
 }
 
 func init() {
-	agent.Register(agent.Define("web_fetch", "Télécharge une page web depuis le container (curl) et la rend en texte : documentation, changelog, issue d'une dépendance…",
+	agent.Register(agent.Define("web_fetch", "Télécharge une page web depuis le container (curl) et la rend en texte : documentation, changelog, issue d'une dépendance, PDF…",
 		func(ctx context.Context, env *agent.Env, a webFetchArgs) (string, error) {
-			p, err := fetch(ctx, env, a.URL)
+			p, err := fetchDocument(ctx, env, a.URL)
 			if err != nil {
 				return "", err
 			}

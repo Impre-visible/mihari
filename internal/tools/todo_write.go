@@ -55,5 +55,5 @@ func init() {
 				result += " (pas affiché sur GitLab : " + err.Error() + ")"
 			}
 			return result, nil
-		}))
+		}, agent.Writes()))
 }

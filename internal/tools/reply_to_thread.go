@@ -25,5 +25,5 @@ func init() {
 				}
 			}
 			return "Réponse postée dans le fil.", nil
-		}, agent.When(hasTarget)))
+		}, agent.When(hasTarget), agent.Writes()))
 }

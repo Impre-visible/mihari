@@ -21,7 +21,7 @@ func init() {
 				return "", err
 			}
 			return fmt.Sprintf("%s écrit (%d octets).", a.Path, len(a.Content)), nil
-		}))
+		}, agent.Writes()))
 }
 
 // write replaces the file at p with content.

@@ -10,6 +10,8 @@ export type ToolCall = {
   raw: string;
   args: Record<string, unknown>;
   result: JobEvent | null;
+  // The lines of the subagent a subagent call ran.
+  children: JobEvent[];
 };
 
 export type Item = { kind: "event"; event: JobEvent } | ToolCall;
@@ -21,8 +23,24 @@ export function toItems(events: JobEvent[]): Item[] {
   const items: Item[] = [];
   const waiting: ToolCall[] = [];
   for (const event of events) {
+    // A subagent runs inside its call: its lines go there, not in the flow.
+    if (event.agent) {
+      const parent = waiting.findLast((c) => c.name === "subagent");
+      if (parent) {
+        parent.children.push(event);
+        continue;
+      }
+    }
     if (event.kind === "tool") {
-      const call: ToolCall = { kind: "call", name: event.title, at: event.at, raw: event.text, args: parse(event.text), result: null };
+      const call: ToolCall = {
+        kind: "call",
+        name: event.title,
+        at: event.at,
+        raw: event.text,
+        args: parse(event.text),
+        result: null,
+        children: [],
+      };
       items.push(call);
       waiting.push(call);
       continue;

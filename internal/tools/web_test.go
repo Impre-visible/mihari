@@ -68,3 +68,30 @@ func TestWebFetch(t *testing.T) {
 		t.Error("only http and https")
 	}
 }
+
+func TestWebFetchPDF(t *testing.T) {
+	runner := &fakeRunner{respond: func(cmd string) sandbox.Result {
+		switch {
+		case strings.Contains(cmd, "curl"):
+			return sandbox.Result{Stdout: "200 application/pdf"}
+		case strings.Contains(cmd, "pdftotext"):
+			return sandbox.Result{}
+		case strings.Contains(cmd, ".txt'") || strings.Contains(cmd, ".txt |"):
+			return sandbox.Result{Stdout: "Le texte du PDF"}
+		case strings.Contains(cmd, "tail -c"):
+			return sandbox.Result{Stdout: "%PDF-"}
+		}
+		return sandbox.Result{}
+	}}
+	out, err := run(t, &agent.Env{Runner: runner}, "web_fetch", map[string]any{"url": "https://example.com/spec.pdf"})
+	if err != nil || !strings.HasSuffix(out, "Le texte du PDF") || !strings.Contains(out, "converti en texte") {
+		t.Fatalf("got %q, %v", out, err)
+	}
+	found := false
+	for _, cmd := range runner.commands {
+		found = found || strings.Contains(cmd, "apt-get install -y poppler-utils")
+	}
+	if !found {
+		t.Error("the hint should name the package that has pdftotext")
+	}
+}

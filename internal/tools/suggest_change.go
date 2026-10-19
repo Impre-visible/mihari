@@ -37,7 +37,7 @@ func init() {
 				return "", fmt.Errorf("la ligne %d de %s n'est pas modifiable par une suggestion (elle doit être dans le diff) : %w", line, a.Path, err)
 			}
 			return fmt.Sprintf("Suggestion postée sur %s:%d (fil %s, pour reply_to_thread).", a.Path, line, thread), nil
-		}, agent.When(reviewing)))
+		}, agent.When(reviewing), agent.Writes()))
 }
 
 // suggestion builds GitLab's suggestion block for a, anchored on its last

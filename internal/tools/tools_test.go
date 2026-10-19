@@ -228,3 +228,26 @@ func TestAskUser(t *testing.T) {
 		}
 	}
 }
+
+func TestExecuteCode(t *testing.T) {
+	runner := &fakeRunner{respond: func(string) sandbox.Result { return sandbox.Result{Stdout: "42\n"} }}
+	out, err := run(t, &agent.Env{Runner: runner}, "execute_code", map[string]any{"code": "print(6*7)"})
+	if err != nil || !strings.HasPrefix(out, "42\n") {
+		t.Fatalf("got %q, %v", out, err)
+	}
+	if cmd := runner.last(); !strings.Contains(cmd, "command -v python3") || !strings.Contains(cmd, ".py && python3 /tmp/mihari/code/") || runner.stdin[0] != "print(6*7)" {
+		t.Errorf("ran %q", cmd)
+	}
+	if _, err := run(t, &agent.Env{Runner: runner}, "execute_code", map[string]any{"code": "x", "language": "ruby"}); err == nil {
+		t.Error("unknown language should fail")
+	}
+}
+
+func TestSessionSearch(t *testing.T) {
+	var asked string
+	var id int
+	env := &agent.Env{PastJobs: func(q string, j int) (string, error) { asked, id = q, j; return "job 3", nil }}
+	if out, err := run(t, env, "session_search", map[string]any{"query": "migration", "job_id": 3}); err != nil || out != "job 3" || asked != "migration" || id != 3 {
+		t.Errorf("got %q, %v", out, err)
+	}
+}

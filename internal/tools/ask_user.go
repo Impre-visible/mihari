@@ -51,5 +51,5 @@ func init() {
 				}
 				return fmt.Sprintf("%s :\n%s", m.Title, m.Text), nil
 			}
-		}, agent.When(pinged)))
+		}, agent.When(pinged), agent.Writes()))
 }

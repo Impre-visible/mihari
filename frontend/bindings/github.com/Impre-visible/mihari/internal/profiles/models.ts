@@ -33,6 +33,11 @@ export interface Profile {
     "maxMinutes": number;
     "unlimitedTurns": boolean;
     "unlimitedTime": boolean;
+
+    /**
+     * The model reads images, so jobs may hand it some (read_image).
+     */
+    "vision": boolean;
 }
 
 /**

@@ -23,6 +23,8 @@ type Tool interface {
 	Schema() map[string]any
 	// Whether the tool is offered for this job: a push tool, say, only where pushing makes sense.
 	Available(env *Env) bool
+	// Whether it changes something: files, GitLab, the plan. A subagent only reads.
+	Writes() bool
 	Run(ctx context.Context, env *Env, args json.RawMessage) (string, error)
 }
 
@@ -59,7 +61,7 @@ func toolsFor(env *Env) []Tool {
 	defer registryMu.Unlock()
 	var out []Tool
 	for _, t := range registry {
-		if t.Available(env) {
+		if t.Available(env) && !(env.ReadOnly && t.Writes()) {
 			out = append(out, t)
 		}
 	}
@@ -71,6 +73,7 @@ type typedTool[A any] struct {
 	schema            map[string]any
 	run               func(context.Context, *Env, A) (string, error)
 	available         func(*Env) bool
+	writes            bool
 }
 
 func (t *typedTool[A]) Name() string           { return t.name }
@@ -80,6 +83,8 @@ func (t *typedTool[A]) Schema() map[string]any { return t.schema }
 func (t *typedTool[A]) Available(env *Env) bool {
 	return t.available == nil || t.available(env)
 }
+
+func (t *typedTool[A]) Writes() bool { return t.writes }
 
 func (t *typedTool[A]) Run(ctx context.Context, env *Env, raw json.RawMessage) (string, error) {
 	var args A
@@ -96,11 +101,18 @@ type Option func(*toolOptions)
 
 type toolOptions struct {
 	available func(*Env) bool
+	writes    bool
 }
 
 // When offers the tool only for jobs where ok returns true.
 func When(ok func(*Env) bool) Option {
 	return func(o *toolOptions) { o.available = ok }
+}
+
+// Writes marks a tool that changes something, which a read-only agent, such
+// as a subagent, does not get.
+func Writes() Option {
+	return func(o *toolOptions) { o.writes = true }
 }
 
 // Define makes a tool from a function taking its arguments as a struct A.
@@ -114,7 +126,7 @@ func Define[A any](name, description string, run func(context.Context, *Env, A) 
 	}
 	var zero A
 	return &typedTool[A]{
-		name: name, description: description, run: run, available: o.available,
+		name: name, description: description, run: run, available: o.available, writes: o.writes,
 		schema: schemaOf(reflect.TypeOf(zero)),
 	}
 }

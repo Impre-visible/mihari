@@ -15,6 +15,25 @@ type message struct {
 	Content    string     `json:"content"`
 	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
+	// Data URLs sent along with Content, as OpenAI-style content parts.
+	Images []string `json:"-"`
+}
+
+// MarshalJSON sends a message with images as a list of content parts, the
+// only form that carries them.
+func (m message) MarshalJSON() ([]byte, error) {
+	type plain message
+	if len(m.Images) == 0 {
+		return json.Marshal(plain(m))
+	}
+	parts := []map[string]any{{"type": "text", "text": m.Content}}
+	for _, url := range m.Images {
+		parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]string{"url": url}})
+	}
+	return json.Marshal(struct {
+		plain
+		Content []map[string]any `json:"content"`
+	}{plain(m), parts})
 }
 
 type toolCall struct {

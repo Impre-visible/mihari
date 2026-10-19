@@ -43,8 +43,19 @@ type Env struct {
 	Push func(ctx context.Context, message string) (string, error)
 	// Pushes the job's branch and opens a draft merge request; nil where not allowed.
 	OpenMR func(ctx context.Context, title, description string) (gitlab.MergeRequest, error)
-	// Keeps a note about the project for later jobs.
-	Remember func(note string) error
+	// The project's notes, kept across jobs, and how to replace them; nil
+	// where they are not kept, as in a dry run.
+	Notes    func() string
+	SetNotes func(notes string) error
+	// Finds earlier jobs of the project matching query, or reads job jobID
+	// when it is not 0; nil where there is no history.
+	PastJobs func(query string, jobID int) (string, error)
+	// The model sees images, so read_image may hand it some.
+	Vision bool
+	// A subagent's: only tools that change nothing are offered.
+	ReadOnly bool
+	// Runs task in a read-only subagent and returns its conclusion; nil in a subagent.
+	Subagent func(ctx context.Context, task string) (string, error)
 	// Set for an incremental review: the commit the last review covered.
 	ReviewedSHA string
 	// Dry run: what would be posted on GitLab is kept in Posts instead.
@@ -58,6 +69,8 @@ type Env struct {
 	Finished *Finish
 	Pushes   []string
 	OpenedMR *gitlab.MergeRequest
+	// Images read_image loaded, as data URLs, for the loop to hand the model.
+	Images []string
 	// The model's plan, as todo_write last left it.
 	Todos []Todo
 	// The comment showing the plan on GitLab, 0 when there is none to update:

@@ -132,3 +132,85 @@ func TestRunWithoutLimits(t *testing.T) {
 		t.Errorf("outcome %+v", out)
 	}
 }
+
+func offered(request map[string]any) map[string]bool {
+	names := map[string]bool{}
+	for _, tool := range request["tools"].([]any) {
+		names[tool.(map[string]any)["function"].(map[string]any)["name"].(string)] = true
+	}
+	return names
+}
+
+func TestSubagent(t *testing.T) {
+	// Requests come in order: the parent, then its subagent's two, then the parent again.
+	srv, requests := scriptedModel(t, [][]map[string]any{
+		{call("p1", "subagent", map[string]any{"task": "Où est défini main ?"})},
+		{call("c1", "search", map[string]any{"pattern": "func main"})},
+		{call("c2", "finish", map[string]any{"success": true, "summary": "main est dans main.go:3."})},
+		{call("p2", "finish", map[string]any{"success": true, "summary": "Fait."})},
+	})
+	var events []agent.Event
+	out, err := agent.Run(context.Background(), agent.Config{URL: srv.URL, Model: "m"},
+		&agent.Env{Kind: agent.KindPing, Runner: &fakeRunner{}}, "système", "tâche", nil, func(e agent.Event) { events = append(events, e) })
+	if err != nil || !out.Success || out.Summary != "Fait." {
+		t.Fatalf("outcome %+v, %v", out, err)
+	}
+
+	parent, child := offered((*requests)[0]), offered((*requests)[1])
+	if !parent["subagent"] || !parent["write_file"] {
+		t.Errorf("parent tools: %v", parent)
+	}
+	for _, name := range []string{"subagent", "write_file", "edit_file", "apply_patch", "todo_write", "memory"} {
+		if child[name] {
+			t.Errorf("the subagent should not get %s", name)
+		}
+	}
+	if !child["read_file"] || !child["run_command"] || !child["finish"] {
+		t.Errorf("subagent tools: %v", child)
+	}
+	// Its conclusion is the result of the parent's call.
+	last := (*requests)[3]["messages"].([]any)
+	if r := last[len(last)-1].(map[string]any); r["content"] != "main est dans main.go:3." {
+		t.Errorf("parent got %v", r)
+	}
+	// Its lines are marked for the chat to nest them.
+	marked := 0
+	for _, e := range events {
+		if e.Agent == "subagent" {
+			marked++
+		}
+	}
+	if marked == 0 || events[len(events)-1].Agent != "" {
+		t.Errorf("%d subagent lines in %+v", marked, events)
+	}
+}
+
+func TestReadImageReachesTheModel(t *testing.T) {
+	png := "\x89PNG\r\n\x1a\n" + strings.Repeat("\x00", 20)
+	srv, requests := scriptedModel(t, [][]map[string]any{
+		{call("a", "read_image", map[string]any{"path": "shot.png"})},
+		{call("b", "finish", map[string]any{"success": true, "summary": "vu"})},
+	})
+	runner := &fakeRunner{respond: func(string) sandbox.Result { return sandbox.Result{Stdout: png} }}
+	env := &agent.Env{Kind: agent.KindPing, Runner: runner, Vision: true}
+	if _, err := agent.Run(context.Background(), agent.Config{URL: srv.URL, Model: "m"}, env, "s", "t", nil, func(agent.Event) {}); err != nil {
+		t.Fatal(err)
+	}
+	msgs := (*requests)[1]["messages"].([]any)
+	parts, ok := msgs[len(msgs)-1].(map[string]any)["content"].([]any)
+	if !ok || len(parts) != 2 {
+		t.Fatalf("last message %v", msgs[len(msgs)-1])
+	}
+	url := parts[1].(map[string]any)["image_url"].(map[string]any)["url"].(string)
+	if !strings.HasPrefix(url, "data:image/png;base64,") {
+		t.Errorf("image %q", url)
+	}
+	if offered((*requests)[0])["read_image"] != true {
+		t.Error("read_image is for a model that sees images")
+	}
+	srv2, requests2 := scriptedModel(t, [][]map[string]any{{call("b", "finish", map[string]any{"success": true, "summary": "x"})}})
+	_, _ = agent.Run(context.Background(), agent.Config{URL: srv2.URL, Model: "m"}, &agent.Env{Runner: runner}, "s", "t", nil, func(agent.Event) {})
+	if offered((*requests2)[0])["read_image"] {
+		t.Error("read_image offered without vision")
+	}
+}
