@@ -13,14 +13,14 @@ import (
 
 type readImageArgs struct {
 	Path string `json:"path,omitempty" desc:"Image du repo ou du container (capture, rendu de test…)"`
-	URL  string `json:"url,omitempty" desc:"Ou l'adresse http(s) d'une image, par exemple une capture jointe à une issue"`
+	URL  string `json:"url,omitempty" desc:"Ou l'adresse http(s) d'une image ; pour une pièce jointe d'issue, de MR ou de commentaire, le lien /uploads/… tel quel"`
 }
 
 // Past this size, an image is more likely a mistake than something to look at.
 const imageLimit = 5 << 20
 
 func init() {
-	agent.Register(agent.Define("read_image", "Charge une image pour que tu la voies : capture d'erreur jointe à une issue, rendu d'une page, graphique produit par un test. Tu la reçois juste après ce résultat.",
+	agent.Register(agent.Define("read_image", "Charge une image pour que tu la voies : capture d'erreur jointe à une issue (lien /uploads/… tel quel, lu avec l'accès du bot), rendu d'une page, graphique produit par un test. Tu la reçois juste après ce résultat.",
 		func(ctx context.Context, env *agent.Env, a readImageArgs) (string, error) {
 			var data string
 			var err error
@@ -30,11 +30,20 @@ func init() {
 			case a.Path != "":
 				data, err = readFile(ctx, env, inWorkspace(a.Path), imageLimit+1)
 			case a.URL != "":
-				var p page
-				if p, err = fetch(ctx, env, a.URL); err == nil && p.Status >= 400 {
-					err = fmt.Errorf("HTTP %d", p.Status)
+				// An attachment of the job's GitLab needs the bot's access, which the container has not.
+				var ok bool
+				if env.GitLab != nil {
+					var raw []byte
+					raw, ok, err = env.GitLab.Upload(ctx, a.URL, imageLimit+1)
+					data = string(raw)
 				}
-				data = p.Body
+				if !ok {
+					var p page
+					if p, err = fetch(ctx, env, a.URL); err == nil && p.Status >= 400 {
+						err = fmt.Errorf("HTTP %d", p.Status)
+					}
+					data = p.Body
+				}
 			default:
 				return "", errors.New("donne path ou url")
 			}

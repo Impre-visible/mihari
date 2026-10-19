@@ -112,5 +112,5 @@ func needs(program string) string {
 
 // needsPackage is needs for a program that comes in a package of another name.
 func needsPackage(program, pkg string) string {
-	return fmt.Sprintf("command -v %[1]s >/dev/null 2>&1 || { echo '%[1]s absent de l'\\''image : installe-le avec run_command (apt-get install -y %[2]s, apk add %[2]s…) puis réessaie.' >&2; exit 127; }; ", program, pkg)
+	return fmt.Sprintf("command -v %[1]s >/dev/null 2>&1 || { echo '%[1]s absent de l'\\''image : installe-le avec run_command (apt-get update && apt-get install -y %[2]s, ou apk add %[2]s) puis réessaie.' >&2; exit 127; }; ", program, pkg)
 }
