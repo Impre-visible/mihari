@@ -15,7 +15,8 @@
   let query = $state("");
   let notConfigured = $derived(live.tasks?.notConfigured ?? false);
   let showConnection = $derived(selected === "connection" || notConfigured || (gitlab.loaded && gitlab.projects.length === 0));
-  let current = $derived(gitlab.projects.find((p) => p.id === selected) ?? null);
+  // Nothing picked yet: the first project, not an empty inspector.
+  let current = $derived(gitlab.projects.find((p) => p.id === selected) ?? (selected === null ? (gitlab.projects[0] ?? null) : null));
   let visible = $derived(
     query.trim() === "" ? gitlab.projects : gitlab.projects.filter((p) => p.path.toLowerCase().includes(query.trim().toLowerCase())),
   );

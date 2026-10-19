@@ -9,10 +9,10 @@
   import Activity from "./activity/Activity.svelte";
   import Agent from "./agent/Agent.svelte";
   import GitLab from "./gitlab/GitLab.svelte";
-  import General from "./components/General.svelte";
-  import Bench from "./components/Bench.svelte";
+  import Settings from "./settings/Settings.svelte";
+  import Bench from "./bench/Bench.svelte";
   import Dev from "./components/Dev.svelte";
-  import UpdateBanner from "./components/UpdateBanner.svelte";
+  import UpdateCard from "./settings/UpdateCard.svelte";
   import { live as running } from "./activity/jobState";
 
   // The window: what the bot does first, what it is set up with next, its
@@ -23,7 +23,7 @@
   const setup: Section[] = [
     { id: "agent", label: "Agent", icon: CpuIcon, component: Agent },
     { id: "gitlab", label: "GitLab", icon: GitlabLogoIcon, component: GitLab },
-    { id: "settings", label: "Réglages", icon: GearSixIcon, component: General },
+    { id: "settings", label: "Réglages", icon: GearSixIcon, component: Settings },
   ];
   // Vite sets DEV under wails3 dev only, so production builds never show Dev.
   const tools: Section[] = [
@@ -61,9 +61,9 @@
       <SidebarSection title="Outils">
         {#each tools as s (s.id)}{@render item(s)}{/each}
       </SidebarSection>
+      <UpdateCard />
     </Sidebar>
   {/snippet}
 
-  <UpdateBanner />
   <active.component />
 </AppWindow>
