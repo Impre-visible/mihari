@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowClockwiseIcon, CheckCircleIcon, WarningCircleIcon } from "phosphor-svelte";
+  import { ArrowClockwiseIcon, ArrowSquareOutIcon, CheckCircleIcon, WarningCircleIcon } from "phosphor-svelte";
   import { Browser, Events } from "@wailsio/runtime";
   import { Service as Tasks } from "../../../bindings/github.com/Impre-visible/mihari/internal/tasks";
   import type { Snapshot } from "../../../bindings/github.com/Impre-visible/mihari/internal/tasks/models";
@@ -10,6 +10,9 @@
   import type { Info as SandboxInfo } from "../../../bindings/github.com/Impre-visible/mihari/internal/sandbox/models";
   import { Button, FormGroup, FormRow, Spinner } from "$lib/ui";
   import { ref } from "$lib/refs";
+  import { Service as JobService } from "../../../bindings/github.com/Impre-visible/mihari/internal/jobs";
+  import type { Summary } from "../../../bindings/github.com/Impre-visible/mihari/internal/jobs/models";
+  import { nav } from "$lib/nav.svelte";
   import Jobs from "./Jobs.svelte";
 
   const ACTIONS: Record<string, string> = {
@@ -20,6 +23,7 @@
   };
 
   let snapshot = $state<Snapshot | null>(null);
+  let jobs = $state<Summary[]>([]);
   let engine = $state<EngineSnapshot | null>(null);
   let sandbox = $state<SandboxInfo | null>(null);
 
@@ -46,13 +50,26 @@
     .then((s) => (snapshot = s))
     .catch((err) => console.error("Load tasks:", err));
 
+  JobService.List()
+    .then((list) => (jobs = list ?? []))
+    .catch((err) => console.error("Load jobs:", err));
+
+  // The latest job on the same merge request or issue, to open its conversation.
+  function jobFor(todo: Todo) {
+    return jobs
+      .filter((j) => j.projectId === todo.projectId && j.iid === todo.iid && j.targetType === todo.targetType)
+      .reduce<Summary | null>((latest, j) => (latest === null || j.id > latest.id ? j : latest), null);
+  }
+
   $effect(() => {
     const off = Events.On("tasks:updated", (event) => (snapshot = event.data));
     const offEngine = Events.On("engine:updated", (event) => (engine = event.data));
+    const offJobs = Events.On("jobs:updated", (event) => (jobs = event.data ?? []));
     const timer = setInterval(() => (now = Date.now()), 1000);
     return () => {
       off();
       offEngine();
+      offJobs();
       clearInterval(timer);
     };
   });
@@ -140,14 +157,25 @@
 </div>
 
 {#snippet todoRow(todo: Todo, extra: string)}
-  <FormRow
-    label={todo.title}
-    detail="{ref(todo.project, todo.targetType, todo.iid)} · @{todo.author} · {ACTIONS[todo.action] ?? todo.action}{todo.simulated
-      ? ' · simulée'
-      : ''}{extra}"
-    chevron
-    onclick={() => Browser.OpenURL(todo.url)}
-  />
+  {@const job = jobFor(todo)}
+  {@const detail = `${ref(todo.project, todo.targetType, todo.iid)} · @${todo.author} · ${ACTIONS[todo.action] ?? todo.action}${todo.simulated ? " · simulée" : ""}${extra}`}
+  {#if job}
+    <!-- A job already worked on it: its conversation says more than GitLab. -->
+    <FormRow label={todo.title} {detail} chevron onclick={() => (nav.jobId = job.id)} />
+  {:else}
+    <FormRow label={todo.title} {detail}>
+      <Button
+        size="small"
+        variant="borderless"
+        iconOnly
+        aria-label="Ouvrir sur GitLab"
+        title="Ouvrir sur GitLab"
+        onclick={() => Browser.OpenURL(todo.url)}
+      >
+        <ArrowSquareOutIcon size={14} aria-hidden="true" />
+      </Button>
+    </FormRow>
+  {/if}
 {/snippet}
 
 <FormGroup title="Prêtes ({todos.length})" class="mt-4">

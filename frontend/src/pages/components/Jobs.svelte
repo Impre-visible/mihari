@@ -14,6 +14,7 @@
   import { Button, FormGroup, Spinner } from "$lib/ui";
   import { ref } from "$lib/refs";
   import { nav } from "$lib/nav.svelte";
+  import JobChat from "./chat/JobChat.svelte";
 
   type Props = { now: number };
   let { now }: Props = $props();
@@ -25,13 +26,10 @@
     failed: "échec",
     canceled: "annulé",
   };
-  // Long outputs fold past this, so a transcript stays scrollable.
-  const FOLD = 1500;
 
   let jobs = $state<Summary[]>([]);
   let selected = $state<number | null>(null);
   let events = $state<JobEvent[]>([]);
-  let unfolded = $state<Record<number, boolean>>({});
 
   let active = $derived(jobs.filter((j) => j.state === "queued" || j.state === "running"));
   let history = $derived(jobs.filter((j) => j.state !== "queued" && j.state !== "running"));
@@ -63,7 +61,6 @@
   function open(id: number) {
     selected = id;
     events = [];
-    unfolded = {};
     Jobs.Transcript(id)
       .then((list) => {
         // Lines that arrived while loading are in the list too.
@@ -78,33 +75,6 @@
     const end = j.endedAt.startsWith("0001") ? now : Date.parse(j.endedAt);
     const s = Math.max(0, Math.round((end - start) / 1000));
     return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")}`;
-  }
-
-  function time(at: string) {
-    return new Date(at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  }
-
-  function label(e: JobEvent) {
-    switch (e.kind) {
-      case "tool":
-        return `→ ${e.title}`;
-      case "result":
-        return `← ${e.title}`;
-      default:
-        return e.title;
-    }
-  }
-
-  // Tool arguments arrive as JSON; shown indented they read better.
-  function body(e: JobEvent) {
-    if (e.kind === "tool") {
-      try {
-        return JSON.stringify(JSON.parse(e.text), null, 2);
-      } catch {
-        return e.text;
-      }
-    }
-    return e.text;
   }
 </script>
 
@@ -172,50 +142,7 @@
     <p class="p-subhead-2 mt-2 ms-2.5 text-label select-text">{current.error}</p>
   {/if}
 
-  <FormGroup class="mt-4">
-    {#each events as e, i (i)}
-      {@const text = body(e)}
-      {@const long = text.length > FOLD}
-      <div class="p-form-row flex-col items-stretch! gap-1 py-2">
-        <div class="flex items-center gap-2">
-          <span
-            class={[
-              "p-subhead-2 font-semibold",
-              e.kind === "error" && "text-(--p-sys-red)",
-              e.kind === "message" && "text-(--p-sys-blue)",
-              (e.kind === "result" || e.kind === "info") && "text-secondary-label",
-            ]}>{label(e)}</span
-          >
-          <span class="p-subhead-2 ms-auto text-tertiary-label tabular-nums">{time(e.at)}</span>
-        </div>
-        {#if text}
-          {#if e.kind === "system" || e.kind === "reasoning"}
-            <details>
-              <summary class="p-subhead-2 cursor-default text-secondary-label">Afficher</summary>
-              <pre class="p-subhead-2 mt-1 font-mono whitespace-pre-wrap text-secondary-label select-text">{text}</pre>
-            </details>
-          {:else}
-            <pre
-              class={[
-                "p-subhead-2 overflow-x-auto font-mono whitespace-pre-wrap select-text",
-                e.kind === "result" && "text-secondary-label",
-              ]}>{long && !unfolded[i] ? text.slice(0, FOLD) + "…" : text}</pre>
-            {#if long}
-              <button
-                type="button"
-                class="p-subhead-2 self-start text-(--p-sys-blue)"
-                onclick={() => (unfolded[i] = !unfolded[i])}
-              >
-                {unfolded[i] ? "Replier" : `Tout afficher (${text.length} caractères)`}
-              </button>
-            {/if}
-          {/if}
-        {/if}
-      </div>
-    {:else}
-      <p class="p-body py-4 text-center text-tertiary-label">Rien pour l'instant.</p>
-    {/each}
-  </FormGroup>
+  <JobChat {events} live={current.state === "running" || current.state === "queued"} />
 {:else}
   <FormGroup
     title="Jobs ({active.length})"
