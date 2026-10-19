@@ -2,8 +2,11 @@ package tools
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
+
+var unifiedHeader = regexp.MustCompile(`^@@ -\d+(,\d+)? \+\d+(,\d+)? @@`)
 
 // The patch format of Codex, also OpenCode's and Hermes's, which many models
 // are trained to write:
@@ -54,10 +57,15 @@ func parseCodexPatch(patch string) ([]codexOp, error) {
 		case strings.HasPrefix(header, "*** Add File: "):
 			op := codexOp{kind: "add", path: strings.TrimSpace(strings.TrimPrefix(header, "*** Add File: "))}
 			for i++; i < len(lines) && !codexBoundary(strings.TrimSpace(lines[i])); i++ {
-				if !strings.HasPrefix(lines[i], "+") {
-					return nil, fmt.Errorf("ligne %q dans *** Add File: %s : chaque ligne commence par +", lines[i], op.path)
+				switch {
+				case strings.HasPrefix(lines[i], "+"):
+					op.lines = append(op.lines, lines[i][1:])
+				// A bare blank line can only mean a blank line.
+				case strings.TrimSpace(lines[i]) == "":
+					op.lines = append(op.lines, "")
+				default:
+					return nil, fmt.Errorf("ligne %q dans *** Add File: %s : chaque ligne du nouveau fichier commence par +, y compris les lignes vides (+ seul)", lines[i], op.path)
 				}
-				op.lines = append(op.lines, lines[i][1:])
 			}
 			ops = append(ops, op)
 		case strings.HasPrefix(header, "*** Delete File: "):
@@ -100,7 +108,12 @@ func parseCodexChunks(lines []string, i int, path string) ([]codexChunk, int, er
 			}
 			continue
 		case trimmed == "@@" || strings.HasPrefix(trimmed, "@@ "):
-			chunks = append(chunks, codexChunk{context: strings.TrimPrefix(strings.TrimPrefix(trimmed, "@@"), " ")})
+			context := strings.TrimPrefix(strings.TrimPrefix(trimmed, "@@"), " ")
+			// "@@ -1,3 +1,5 @@" is a unified diff's header, which says nothing here.
+			if unifiedHeader.MatchString(trimmed) {
+				context = ""
+			}
+			chunks = append(chunks, codexChunk{context: context})
 			continue
 		}
 		if len(chunks) == 0 {
@@ -143,7 +156,7 @@ func applyCodexChunks(content, path string, chunks []codexChunk) (string, error)
 		if c.context != "" {
 			found := seekLines(lines, []string{c.context}, at, false)
 			if found < 0 {
-				return "", fmt.Errorf("%s : contexte %q introuvable", path, c.context)
+				return "", fmt.Errorf("%s : la ligne de repère %q (après @@) n'est pas dans le fichier : mets-y une ligne du fichier, telle quelle, ou laisse @@ seul", path, c.context)
 			}
 			at = found + 1
 		}

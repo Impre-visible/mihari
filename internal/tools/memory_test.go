@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -26,8 +27,8 @@ func TestMemory(t *testing.T) {
 		{{Action: "add"}},
 		{{Action: "forget", OldText: "x"}},
 	} {
-		if _, err := applyMemory(notes, ops, day); err == nil {
-			t.Errorf("should fail: %+v", ops)
+		if _, err := applyMemory(notes, ops, day); err == nil || !strings.HasPrefix(err.Error(), "opération 1 (") {
+			t.Errorf("should fail naming the operation: %+v, %v", ops, err)
 		}
 	}
 

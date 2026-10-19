@@ -31,6 +31,15 @@ func TestCodexChunks(t *testing.T) {
 		t.Errorf("loose: %q, %v", got, err)
 	}
 
+	// A unified diff's hunk header is no context to look for; a blank line in a new file is one.
+	ops, err = parseCodexPatch("*** Begin Patch\n*** Add File: n.md\n+# T\n\n+x\n*** Update File: a.txt\n@@ -1,2 +1,2 @@\n a\n-b\n+c\n*** End Patch")
+	if err != nil || strings.Join(ops[0].lines, "|") != "# T||x" {
+		t.Fatalf("lenient parse: %+v, %v", ops, err)
+	}
+	if got, err := applyCodexChunks("a\nb\n", "a.txt", ops[1].chunks); err != nil || got != "a\nc\n" {
+		t.Errorf("unified header: %q, %v", got, err)
+	}
+
 	ops, _ = parseCodexPatch("*** Begin Patch\n*** Update File: a.txt\n-missing\n+x\n*** End Patch")
 	if _, err := applyCodexChunks("abc\n", "a.txt", ops[0].chunks); err == nil {
 		t.Error("lines that are not there should fail")

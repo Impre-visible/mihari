@@ -76,12 +76,12 @@ func applyMemory(notes string, ops []memoryOp, now time.Time) (string, error) {
 		}
 		return fmt.Sprintf("- %s %s", now.Format("2006-01-02"), content), nil
 	}
-	for _, op := range ops {
+	apply := func(op memoryOp) error {
 		switch op.Action {
 		case "add":
 			l, err := line(op.Content)
 			if err != nil {
-				return "", err
+				return err
 			}
 			// The same lesson twice is noise.
 			if !strings.Contains(strings.Join(lines, "\n"), strings.SplitN(l, " ", 3)[2]) {
@@ -90,19 +90,25 @@ func applyMemory(notes string, ops []memoryOp, now time.Time) (string, error) {
 		case "replace":
 			i, err := find(op.OldText)
 			if err != nil {
-				return "", err
+				return err
 			}
 			if lines[i], err = line(op.Content); err != nil {
-				return "", err
+				return err
 			}
 		case "remove":
 			i, err := find(op.OldText)
 			if err != nil {
-				return "", err
+				return err
 			}
 			lines = append(lines[:i], lines[i+1:]...)
 		default:
-			return "", fmt.Errorf("action inconnue %q : add, replace ou remove", op.Action)
+			return fmt.Errorf("action inconnue : add, replace ou remove")
+		}
+		return nil
+	}
+	for n, op := range ops {
+		if err := apply(op); err != nil {
+			return "", fmt.Errorf("opération %d (%s) : %w", n+1, op.Action, err)
 		}
 	}
 	if len(lines) > memoryLimit {
