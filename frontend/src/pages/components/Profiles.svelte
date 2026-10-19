@@ -24,6 +24,7 @@
     TextField,
   } from "$lib/ui";
   import { PROMPT_PRESETS } from "./prompts";
+  import ContextSlider from "./ContextSlider.svelte";
 
   type Status =
     | { kind: "idle" }
@@ -353,13 +354,7 @@
         <Stepper id="profile-{p.id}-jobs" class="me-7 w-20" min={1} max={64} step={1} bind:value={p.maxJobs} />
       </FormRow>
       <FormRow label="Contexte par job (tokens)" for="profile-{p.id}-context">
-        <Stepper
-          id="profile-{p.id}-context"
-          class="me-7 w-28"
-          min={4096}
-          step={4096}
-          bind:value={p.contextPerJob}
-        />
+        <ContextSlider id="profile-{p.id}-context" class="me-7" bind:value={p.contextPerJob} />
       </FormRow>
       <FormRow label="Arguments du moteur" for="profile-{p.id}-args">
         <TextField
