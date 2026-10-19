@@ -165,6 +165,17 @@ func (c *Client) Reply(ctx context.Context, t Target, discussionID, body string)
 	return Note{ID: n.ID, Body: body, Author: c.Bot}, err
 }
 
+// EditNote replaces the body of the comment noteID, without notifying anyone.
+func (c *Client) EditNote(ctx context.Context, t Target, noteID int, body string) error {
+	_, err := send(ctx, http.MethodPut, c.base, c.token, c.path(t, "/notes/"+strconv.Itoa(noteID)), nil, map[string]string{"body": body}, nil)
+	return err
+}
+
+func (c *Client) DeleteNote(ctx context.Context, t Target, noteID int) error {
+	_, err := call(ctx, http.MethodDelete, c.base, c.token, c.path(t, "/notes/"+strconv.Itoa(noteID)), nil, nil)
+	return err
+}
+
 // React adds an emoji to the comment noteID, or to the merge request or issue
 // itself when noteID is 0, and returns the award to remove it later.
 func (c *Client) React(ctx context.Context, t Target, noteID int, emoji string) (int, error) {

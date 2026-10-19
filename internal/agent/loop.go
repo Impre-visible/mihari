@@ -52,6 +52,9 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout)
 		defer cancel()
 	}
+	if env.Inbox == nil {
+		env.Inbox = inbox
+	}
 	say := func(kind, title, text string) {
 		emit(Event{At: time.Now(), Kind: kind, Title: title, Text: text})
 	}
@@ -139,7 +142,7 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 		}
 
 		// News from the thread rides along with the latest tool result.
-		if news := drain(inbox); len(news) > 0 {
+		if news := drain(env.Inbox); len(news) > 0 {
 			var b strings.Builder
 			for _, n := range news {
 				say(n.Kind, n.Title, n.Text)

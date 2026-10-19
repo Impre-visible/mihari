@@ -5,6 +5,7 @@
   import type { Info } from "../../../bindings/github.com/Impre-visible/mihari/internal/updates/models";
   import { CheckCircleIcon, WarningCircleIcon } from "phosphor-svelte";
   import { Service as Discord } from "../../../bindings/github.com/Impre-visible/mihari/internal/discord";
+  import { Service as Settings } from "../../../bindings/github.com/Impre-visible/mihari/internal/settings";
   import { Button, FormGroup, FormRow, Spinner, Switch, TextField } from "$lib/ui";
   import { nav } from "$lib/nav.svelte";
 
@@ -29,6 +30,32 @@
     if (i.checkedAt.startsWith("0001")) return "Pas encore vérifié.";
     const at = new Date(i.checkedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
     return i.available ? `Version ${i.version} disponible (vérifié le ${at}).` : `À jour (vérifié le ${at}).`;
+  }
+
+  // Web search: a SearXNG instance, DuckDuckGo without one.
+
+  let searxng = $state("");
+  let searxngSaved = $state("");
+  let searxngError = $state<string | null>(null);
+
+  // Not Settings.Get: Wails serializes a nil result as {}, not null.
+  Settings.GetConfig().then((config) => {
+    searxng = searxngSaved = typeof config?.searxng_url === "string" ? config.searxng_url : "";
+  });
+
+  async function saveSearxng() {
+    searxngError = null;
+    const value = searxng.trim();
+    if (value && !/^https?:\/\/[^/]+/.test(value)) {
+      searxngError = "Adresse http(s) attendue, par exemple http://searxng.lan:8080.";
+      return;
+    }
+    try {
+      await Settings.Set("searxng_url", value);
+      searxng = searxngSaved = value;
+    } catch (err) {
+      searxngError = messageOf(err);
+    }
   }
 
   // Discord
@@ -125,6 +152,21 @@
   <FormRow label="Assistant de configuration" detail="GitLab, projets, modèle, profil et planning, pas à pas.">
     <Button size="small" onclick={() => (nav.wizard = true)}>Relancer</Button>
   </FormRow>
+</FormGroup>
+
+<FormGroup
+  title="Recherche web"
+  footer="L'agent cherche sur DuckDuckGo depuis le container du job. Avec une instance SearXNG (format json activé), il l'utilise à la place : plus fiable. Elle doit être joignable depuis les containers."
+>
+  <FormRow label="Instance SearXNG" for="general-searxng">
+    <div class="flex items-center gap-2">
+      <TextField id="general-searxng" class="w-60" placeholder="http://searxng.lan:8080" bind:value={searxng} />
+      <Button size="small" disabled={searxng.trim() === searxngSaved} onclick={saveSearxng}>Enregistrer</Button>
+    </div>
+  </FormRow>
+  {#if searxngError}
+    <p class="p-form-row p-subhead-2 py-2.5 text-label select-text">{searxngError}</p>
+  {/if}
 </FormGroup>
 
 <FormGroup

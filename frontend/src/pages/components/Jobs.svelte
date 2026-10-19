@@ -6,6 +6,7 @@
     ArrowSquareOutIcon,
     CheckCircleIcon,
     ClockIcon,
+    ListChecksIcon,
     ProhibitIcon,
     XCircleIcon,
   } from "phosphor-svelte";
@@ -17,6 +18,8 @@
   import { ref } from "$lib/refs";
   import { nav } from "$lib/nav.svelte";
   import JobChat from "./chat/JobChat.svelte";
+  import Plan from "./chat/Plan.svelte";
+  import { latestPlan } from "./chat/transcript";
 
   type Props = { now: number };
   let { now }: Props = $props();
@@ -37,6 +40,8 @@
   let header = $state<HTMLElement | null>(null);
   let scroller = $derived(header?.closest<HTMLElement>(".ui-app-content") ?? null);
   let atBottom = $state(true);
+  // The agent's plan as todo_write last left it, kept in sight in the header.
+  let plan = $derived(latestPlan(events));
 
   let active = $derived(jobs.filter((j) => j.state === "queued" || j.state === "running"));
   let history = $derived(jobs.filter((j) => j.state !== "queued" && j.state !== "running"));
@@ -172,6 +177,20 @@
     </p>
     {#if current.error}
       <p class="p-subhead-2 mt-2 ms-2.5 line-clamp-3 text-label select-text">{current.error}</p>
+    {/if}
+    {#if plan.length}
+      {@const done = plan.filter((t) => t.status === "completed").length}
+      {@const doing = plan.find((t) => t.status === "in_progress")}
+      <details class="mt-2 ms-2.5">
+        <summary class="flex cursor-default list-none items-center gap-1.5 text-secondary-label [&::-webkit-details-marker]:hidden">
+          <ListChecksIcon size={14} aria-hidden="true" />
+          <span class="p-subhead-2 font-semibold">Plan {done}/{plan.length}</span>
+          {#if doing}<span class="p-subhead-2 min-w-0 truncate">· {doing.content}</span>{/if}
+        </summary>
+        <div class="mt-1.5 max-h-48 overflow-y-auto">
+          <Plan todos={plan} />
+        </div>
+      </details>
     {/if}
   </div>
 

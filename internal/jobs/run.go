@@ -16,6 +16,8 @@ import (
 	"github.com/Impre-visible/mihari/internal/projects"
 	"github.com/Impre-visible/mihari/internal/sandbox"
 	"github.com/Impre-visible/mihari/internal/scheduler"
+	// Registers the agent's tools.
+	_ "github.com/Impre-visible/mihari/internal/tools"
 )
 
 // Labels an issues job leaves on its issue.
@@ -406,14 +408,14 @@ func (s *Service) finishPing(ctx context.Context, j *job, env *agent.Env, state 
 	}
 	// The model's summary is the answer when it forgot to post one.
 	if state == StateSucceeded && !env.Replied && outcome.Summary != "" {
-		s.post(ctx, env, outcome.Summary)
+		s.post(ctx, env, env.ClosePlan(ctx)+outcome.Summary)
 	}
 	if state != StateSucceeded {
 		msg := "❌ Je n'ai pas pu terminer : " + reason
 		if state == StateCanceled {
 			msg = "❌ " + reason
 		}
-		s.post(ctx, env, msg)
+		s.post(ctx, env, env.ClosePlan(ctx)+msg)
 	}
 	if j.awardID != 0 {
 		_ = env.GitLab.Unreact(ctx, env.Target, j.awardNote, j.awardID)
@@ -443,19 +445,13 @@ func (s *Service) finishIssue(ctx context.Context, j *job, env *agent.Env, state
 	if err := env.GitLab.Relabel(ctx, env.Target.IID, []string{label}, []string{LabelDoing}); err != nil {
 		log.Printf("relabel #%d: %v", env.Target.IID, err)
 	}
-	if _, err := env.GitLab.Comment(ctx, env.Target, msg); err != nil {
+	if _, err := env.GitLab.Comment(ctx, env.Target, env.ClosePlan(ctx)+msg); err != nil {
 		log.Printf("comment #%d: %v", env.Target.IID, err)
 	}
 }
 
 func (s *Service) post(ctx context.Context, env *agent.Env, body string) {
-	var err error
-	if env.ThreadID != "" {
-		_, err = env.GitLab.Reply(ctx, env.Target, env.ThreadID, body)
-	} else {
-		_, err = env.GitLab.Comment(ctx, env.Target, body)
-	}
-	if err != nil {
+	if _, err := env.Respond(ctx, body); err != nil {
 		log.Printf("post on %s: %v", env.Target.Ref(), err)
 	}
 }

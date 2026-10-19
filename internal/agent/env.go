@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Impre-visible/mihari/internal/gitlab"
@@ -48,12 +50,67 @@ type Env struct {
 	// Dry run: what would be posted on GitLab is kept in Posts instead.
 	DryRun bool
 	Posts  []Post
+	// Messages from the thread not yet handed to the model; Run sets it.
+	Inbox <-chan Event
 
 	// Set by tools.
 	Replied  bool
 	Finished *Finish
 	Pushes   []string
 	OpenedMR *gitlab.MergeRequest
+	// The model's plan, as todo_write last left it.
+	Todos []Todo
+	// The comment showing the plan on GitLab, 0 when there is none to update.
+	PlanNoteID int
+	// Whether the plan changed since a reply last carried it.
+	PlanOpen bool
+}
+
+// Todo is a step of the model's plan.
+type Todo struct {
+	Content string `json:"content"`
+	// pending, in_progress or completed.
+	Status string `json:"status" enum:"pending,in_progress,completed"`
+}
+
+// Respond posts body where the requester looks: in the thread that started
+// the job, or as a new comment.
+func (e *Env) Respond(ctx context.Context, body string) (gitlab.Note, error) {
+	if e.ThreadID != "" {
+		return e.GitLab.Reply(ctx, e.Target, e.ThreadID, body)
+	}
+	return e.GitLab.Comment(ctx, e.Target, body)
+}
+
+// Plan writes the plan as a GitLab task list.
+func (e *Env) Plan() string {
+	var b strings.Builder
+	b.WriteString("**Plan**\n\n")
+	for _, t := range e.Todos {
+		switch t.Status {
+		case "completed":
+			fmt.Fprintf(&b, "- [x] %s\n", t.Content)
+		case "in_progress":
+			fmt.Fprintf(&b, "- [ ] ⏳ **%s**\n", t.Content)
+		default:
+			fmt.Fprintf(&b, "- [ ] %s\n", t.Content)
+		}
+	}
+	return b.String()
+}
+
+// ClosePlan removes the plan's own comment and returns the plan, for the
+// answer to carry: one message at the end, which notifies, where editing
+// the plan's comment would not. "" when no plan is waiting to be shown.
+func (e *Env) ClosePlan(ctx context.Context) string {
+	if !e.PlanOpen {
+		return ""
+	}
+	if e.PlanNoteID != 0 && e.GitLab != nil {
+		_ = e.GitLab.DeleteNote(ctx, e.Target, e.PlanNoteID)
+	}
+	e.PlanNoteID, e.PlanOpen = 0, false
+	return e.Plan() + "\n"
 }
 
 // Post is something a tool would have posted on GitLab during a dry run.
@@ -65,8 +122,8 @@ type Post struct {
 	Body string `json:"body"`
 }
 
-// keep records p instead of posting it, and reports whether the run is dry.
-func (e *Env) keep(p Post) bool {
+// Keep records p instead of posting it, and reports whether the run is dry.
+func (e *Env) Keep(p Post) bool {
 	if e.DryRun {
 		e.Posts = append(e.Posts, p)
 	}
@@ -78,5 +135,3 @@ type Finish struct {
 	Success bool
 	Summary string
 }
-
-type gitlabNote = gitlab.Note
