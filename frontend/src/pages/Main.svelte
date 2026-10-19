@@ -48,7 +48,15 @@
 <AppWindow title={active.label}>
   {#snippet sidebar()}
     <Sidebar label="Sections">
-      <SidebarItem icon={GaugeIcon} selected={nav.section === "status"} onclick={() => (nav.section = "status")}>
+      <!-- Also leaves an open job for the list. -->
+      <SidebarItem
+        icon={GaugeIcon}
+        selected={nav.section === "status"}
+        onclick={() => {
+          nav.section = "status";
+          nav.jobId = null;
+        }}
+      >
         État
       </SidebarItem>
 

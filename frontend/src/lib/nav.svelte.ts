@@ -1,5 +1,5 @@
-// Which section is shown, and a job to open in it: shared so that a click on
-// a notification, handled in Main, can open a transcript in Jobs.
+// Which section is shown, and the job open in it as its own page: shared so
+// that a click on a notification, handled in Main, can open a job.
 export const nav = $state<{ section: string; jobId: number | null; wizard: boolean }>({
   section: "status",
   jobId: null,
