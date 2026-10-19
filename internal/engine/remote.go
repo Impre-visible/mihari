@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,10 +18,23 @@ import (
 	"github.com/Impre-visible/mihari/internal/devmode"
 	"github.com/Impre-visible/mihari/internal/profiles"
 	"github.com/Impre-visible/mihari/internal/settings"
+	"github.com/Impre-visible/mihari/internal/version"
 )
 
-// OpenCode Zen, without the /v1 suffix the API clients add.
-const DefaultRemoteURL = "https://opencode.ai/zen"
+// OpenCode's APIs, without the /v1 suffix the API clients add: Go is the
+// monthly subscription, Zen the pay-as-you-go credits.
+const (
+	OpenCodeGoURL  = "https://opencode.ai/inference/go"
+	OpenCodeZenURL = "https://opencode.ai/zen"
+
+	DefaultRemoteURL = OpenCodeGoURL
+)
+
+// OpenCode Go turns away clients that do not name themselves, or send no
+// conversation id; jobs send theirs in this header.
+const sessionHeader = "X-Opencode-Session"
+
+var userAgent = "mihari/" + version.Version
 
 const (
 	remoteURLField = "dev_inference_url"
@@ -54,7 +68,7 @@ func (s *Service) RemoteSettings() (Remote, error) {
 	return Remote{URL: remoteURL(), HasKey: remoteKey() != ""}, nil
 }
 
-// SetRemote saves the remote API's URL, "" meaning OpenCode Zen. An empty key
+// SetRemote saves the remote API's URL, "" meaning OpenCode Go. An empty key
 // keeps the stored one.
 func (s *Service) SetRemote(rawURL, key string) error {
 	if !devmode.Enabled {
@@ -139,6 +153,8 @@ func remoteChat(ctx context.Context, base, key, model, message string) (string, 
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+key)
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set(sessionHeader, rand.Text())
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("API distante injoignable : %w", err)
@@ -185,10 +201,16 @@ func serveRemote(ctx context.Context, base, key, model string) (*Server, error) 
 		return nil, err
 	}
 
+	fallbackSession := rand.Text()
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(upstream)
 			r.Out.Header.Set("Authorization", "Bearer "+key)
+			r.Out.Header.Set("User-Agent", userAgent)
+			if r.Out.Header.Get(sessionHeader) == "" {
+				// The Dev page's test chat has no job to take an id from.
+				r.Out.Header.Set(sessionHeader, fallbackSession)
+			}
 		},
 	}
 	l, err := net.Listen("tcp", "127.0.0.1:0")

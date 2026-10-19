@@ -72,7 +72,7 @@ export enum Kind {
     LMStudio = "lmstudio",
 
     /**
-     * A remote OpenAI-compatible API, OpenCode Zen by default, for development
+     * A remote OpenAI-compatible API, OpenCode Go by default, for development
      * machines too small to run a model.
      */
     OpenCode = "opencode",

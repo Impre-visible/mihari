@@ -10,7 +10,7 @@ import (
 )
 
 func TestServeRemote(t *testing.T) {
-	var gotPath, gotAuth string
+	var gotPath, gotAuth, gotAgent, gotSession string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer secret" {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -21,6 +21,7 @@ func TestServeRemote(t *testing.T) {
 			io.WriteString(w, `{"data":[{"id":"big-pickle"},{"id":"kimi-k2.6"}]}`)
 		default:
 			gotPath, gotAuth = r.URL.Path, r.Header.Get("Authorization")
+			gotAgent, gotSession = r.Header.Get("User-Agent"), r.Header.Get(sessionHeader)
 			io.WriteString(w, `{"choices":[{"message":{"content":"ok"}}]}`)
 		}
 	}))
@@ -46,6 +47,20 @@ func TestServeRemote(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != http.StatusOK || gotPath != "/zen/v1/chat/completions" || gotAuth != "Bearer secret" {
 		t.Fatalf("status %d, upstream saw %s with %q", res.StatusCode, gotPath, gotAuth)
+	}
+	if !strings.HasPrefix(gotAgent, "mihari/") || gotSession == "" {
+		t.Fatalf("OpenCode Go needs a user agent and a session, got %q and %q", gotAgent, gotSession)
+	}
+	// A job's own session goes through untouched.
+	req, _ := http.NewRequest(http.MethodPost, s.URL+"/v1/chat/completions", strings.NewReader(`{}`))
+	req.Header.Set(sessionHeader, "job-1")
+	res, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if gotSession != "job-1" {
+		t.Fatalf("session %q, want the job's", gotSession)
 	}
 
 	s.Stop()

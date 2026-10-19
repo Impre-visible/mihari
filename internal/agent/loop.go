@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,6 +54,7 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 	}
 
 	messages := []message{{Role: "system", Content: system}, {Role: "user", Content: task}}
+	session := rand.Text()
 	say("system", "Prompt", system)
 	say("task", "Demande", task)
 
@@ -77,7 +79,7 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 			byName[t.Name()] = t
 		}
 
-		res, err := chat(ctx, cfg.URL, cfg.Model, messages, tools)
+		res, err := chat(ctx, cfg.URL, cfg.Model, session, messages, tools)
 		if err != nil {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				return out(Outcome{Turns: turn}), fmt.Errorf("délai de %s dépassé", cfg.Timeout)

@@ -57,7 +57,7 @@ export function RemoteSettings(): $CancellablePromise<$models.Remote> {
 }
 
 /**
- * SetRemote saves the remote API's URL, "" meaning OpenCode Zen. An empty key
+ * SetRemote saves the remote API's URL, "" meaning OpenCode Go. An empty key
  * keeps the stored one.
  */
 export function SetRemote(rawURL: string, key: string): $CancellablePromise<void> {

@@ -29,15 +29,29 @@
 
   // Remote inference
 
+  // Mirrors OpenCodeGoURL and OpenCodeZenURL in internal/engine/remote.go.
+  const OFFERS = [
+    { value: "https://opencode.ai/inference/go", label: "OpenCode Go (abonnement)" },
+    { value: "https://opencode.ai/zen", label: "OpenCode Zen (crédits)" },
+    { value: "custom", label: "Autre API compatible OpenAI" },
+  ];
+
+  let remoteOffer = $state(OFFERS[0].value);
   let remoteURL = $state("");
   let remoteKey = $state("");
   let hasRemoteKey = $state(false);
-  let remoteModel = $state("kimi-k2.6");
+  let remoteModel = $state("glm-5.3");
+
+  function chosenURL() {
+    return remoteOffer === "custom" ? remoteURL.trim() : remoteOffer;
+  }
   let remoteStatus = $state<Status>({ kind: "idle" });
 
   Engine.RemoteSettings()
     .then((r) => {
-      remoteURL = r.url;
+      const known = OFFERS.some((o) => o.value === r.url);
+      remoteOffer = known ? r.url : "custom";
+      remoteURL = known ? "" : r.url;
       hasRemoteKey = r.hasKey;
     })
     .catch((err) => console.error("Load remote settings:", err));
@@ -45,12 +59,12 @@
   async function saveRemote() {
     remoteStatus = { kind: "busy", label: "Enregistrement…" };
     try {
-      await Engine.SetRemote(remoteURL.trim(), remoteKey.trim());
+      await Engine.SetRemote(chosenURL(), remoteKey.trim());
       hasRemoteKey ||= remoteKey.trim() !== "";
       remoteKey = "";
       remoteStatus = {
         kind: "ok",
-        message: "Enregistré. Choisis le moteur OpenCode Zen dans un profil pour l'utiliser.",
+        message: "Enregistré. Choisis le moteur OpenCode dans un profil pour l'utiliser.",
       };
     } catch (err) {
       remoteStatus = { kind: "error", message: errorMessage(err) };
@@ -60,7 +74,7 @@
   async function testRemote() {
     remoteStatus = { kind: "busy", label: "Le modèle distant répond…" };
     try {
-      const r = await Engine.TestRemote(remoteURL.trim(), remoteKey.trim(), remoteModel.trim());
+      const r = await Engine.TestRemote(chosenURL(), remoteKey.trim(), remoteModel.trim());
       remoteStatus = {
         kind: "ok",
         message: `${remoteModel.trim()} a répondu en ${(r.durationMs / 1000).toFixed(1)} s : ${r.text.trim() || "(réponse vide)"}`,
@@ -192,17 +206,22 @@
 >
   <FormGroup
     title="Inférence distante"
-    footer="Pour le moteur OpenCode Zen d'un profil : les requêtes partent vers cette API compatible OpenAI au lieu d'un modèle local. Seuls les modèles servis en /v1/chat/completions marchent, et le code des MR quitte la machine. Tester utilise les valeurs saisies, sans les enregistrer."
+    footer="Pour le moteur OpenCode d'un profil : les requêtes partent vers cette API compatible OpenAI au lieu d'un modèle local. Seuls les modèles servis en /v1/chat/completions marchent, et le code des MR quitte la machine. Tester utilise les valeurs saisies, sans les enregistrer."
   >
-    <FormRow label="URL de l'API (sans /v1)" for="dev-remote-url">
-      <TextField
-        id="dev-remote-url"
-        type="url"
-        class="w-96 font-mono"
-        placeholder="https://opencode.ai/zen"
-        bind:value={remoteURL}
-      />
+    <FormRow label="Offre" for="dev-remote-offer">
+      <Select id="dev-remote-offer" class="me-7" options={OFFERS} bind:value={remoteOffer} />
     </FormRow>
+    {#if remoteOffer === "custom"}
+      <FormRow label="URL de l'API (sans /v1)" for="dev-remote-url">
+        <TextField
+          id="dev-remote-url"
+          type="url"
+          class="w-96 font-mono"
+          placeholder="https://openrouter.ai/api"
+          bind:value={remoteURL}
+        />
+      </FormRow>
+    {/if}
     <FormRow label="Clé API" for="dev-remote-key">
       <div class="flex items-center gap-2">
         <TextField
@@ -225,14 +244,17 @@
       </div>
     </FormRow>
     <FormRow label="Modèle à tester" for="dev-remote-model">
-      <TextField id="dev-remote-model" class="w-72 font-mono" placeholder="kimi-k2.6" bind:value={remoteModel} />
+      <TextField id="dev-remote-model" class="w-72 font-mono" placeholder="glm-5.3" bind:value={remoteModel} />
     </FormRow>
   </FormGroup>
 
   <div class="mt-4 flex items-center gap-2">
     {@render statusLine(remoteStatus)}
     <Button
-      disabled={remoteStatus.kind === "busy" || remoteModel.trim() === "" || (!hasRemoteKey && remoteKey.trim() === "")}
+      disabled={remoteStatus.kind === "busy" ||
+        remoteModel.trim() === "" ||
+        (remoteOffer === "custom" && remoteURL.trim() === "") ||
+        (!hasRemoteKey && remoteKey.trim() === "")}
       onclick={testRemote}
     >
       Tester

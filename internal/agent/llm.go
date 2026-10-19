@@ -32,7 +32,9 @@ type completion struct {
 	CompletionTokens int
 }
 
-func chat(ctx context.Context, baseURL, model string, messages []message, tools []Tool) (completion, error) {
+// session is the same for every call of a job: remote APIs such as OpenCode Go
+// route and cache prompts by conversation.
+func chat(ctx context.Context, baseURL, model, session string, messages []message, tools []Tool) (completion, error) {
 	specs := make([]map[string]any, len(tools))
 	for i, t := range tools {
 		specs[i] = map[string]any{"type": "function", "function": map[string]any{
@@ -50,6 +52,7 @@ func chat(ctx context.Context, baseURL, model string, messages []message, tools 
 		return completion{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Opencode-Session", session)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return completion{}, fmt.Errorf("moteur injoignable : %w", err)

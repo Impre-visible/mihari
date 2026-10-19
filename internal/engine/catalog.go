@@ -17,7 +17,7 @@ const (
 	VLLMMLX     Kind = "vllm-mlx"
 	Ollama      Kind = "ollama"
 	LMStudio    Kind = "lmstudio"
-	// A remote OpenAI-compatible API, OpenCode Zen by default, for development
+	// A remote OpenAI-compatible API, OpenCode Go by default, for development
 	// machines too small to run a model.
 	OpenCode Kind = "opencode"
 )
@@ -78,9 +78,9 @@ func catalog() []Info {
 			ModelHint: "qwen/qwen3-32b",
 		},
 		{
-			Kind: OpenCode, Label: "OpenCode Zen (dev, distant)", Supported: devmode.Enabled,
-			Install:   "Renseigne une clé API OpenCode Zen (opencode.ai/auth) dans la page Dev.",
-			ModelHint: "kimi-k2.6",
+			Kind: OpenCode, Label: "OpenCode (dev, distant)", Supported: devmode.Enabled,
+			Install:   "Renseigne une clé API OpenCode Go ou Zen (opencode.ai/auth) dans la page Dev.",
+			ModelHint: "glm-5.3",
 		},
 	}
 }
