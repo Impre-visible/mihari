@@ -269,8 +269,8 @@ func (s *Service) benchProfile(ctx context.Context, i int, todo gitlab.Todo, p p
 
 	begin := time.Now()
 	outcome, err := agent.Run(ctx, agent.Config{
-		URL: server.URL, Model: server.Model, MaxTurns: p.MaxTurns,
-		Timeout: time.Duration(p.MaxMinutes) * time.Minute, ContextTokens: p.ContextPerJob,
+		URL: server.URL, Model: server.Model, MaxTurns: p.TurnLimit(),
+		Timeout: p.TimeLimit(), ContextTokens: p.ContextPerJob,
 	}, env, j.systemPrompt, j.taskPrompt, nil, func(e agent.Event) {
 		j.events = append(j.events, e)
 	})

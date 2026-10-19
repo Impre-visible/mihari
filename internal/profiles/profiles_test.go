@@ -49,3 +49,14 @@ func TestActive(t *testing.T) {
 		}
 	}
 }
+
+func TestLimits(t *testing.T) {
+	p := Profile{MaxTurns: 50, MaxMinutes: 30}
+	if p.TurnLimit() != 50 || p.TimeLimit() != 30*time.Minute {
+		t.Errorf("limits %d, %s", p.TurnLimit(), p.TimeLimit())
+	}
+	p.UnlimitedTurns, p.UnlimitedTime = true, true
+	if p.TurnLimit() != 0 || p.TimeLimit() != 0 {
+		t.Errorf("unlimited gave %d, %s", p.TurnLimit(), p.TimeLimit())
+	}
+}

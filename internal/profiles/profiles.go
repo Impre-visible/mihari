@@ -36,9 +36,28 @@ type Profile struct {
 	Label         string  `json:"label"`
 	// Appended as is to the engine's command line, split on whitespace.
 	ExtraArgs string `json:"extraArgs"`
-	// A job fails past this many model calls or minutes.
-	MaxTurns   int `json:"maxTurns"`
-	MaxMinutes int `json:"maxMinutes"`
+	// A job fails past this many model calls or minutes, unless the matching
+	// Unlimited field lifts the limit.
+	MaxTurns       int  `json:"maxTurns"`
+	MaxMinutes     int  `json:"maxMinutes"`
+	UnlimitedTurns bool `json:"unlimitedTurns"`
+	UnlimitedTime  bool `json:"unlimitedTime"`
+}
+
+// TurnLimit returns the most model calls a job may make, 0 for no limit.
+func (p Profile) TurnLimit() int {
+	if p.UnlimitedTurns {
+		return 0
+	}
+	return p.MaxTurns
+}
+
+// TimeLimit returns how long a job may run, 0 for no limit.
+func (p Profile) TimeLimit() time.Duration {
+	if p.UnlimitedTime {
+		return 0
+	}
+	return time.Duration(p.MaxMinutes) * time.Minute
 }
 
 // Segment is a weekly time range. Days use time.Weekday numbering, and an End

@@ -39,8 +39,8 @@ func (s *Service) run(ctx context.Context, j *job, active scheduler.Active) {
 
 		p := active.Profile
 		outcome, err = agent.Run(ctx, agent.Config{
-			URL: active.URL, Model: active.Model, MaxTurns: p.MaxTurns,
-			Timeout: time.Duration(p.MaxMinutes) * time.Minute, ContextTokens: p.ContextPerJob,
+			URL: active.URL, Model: active.Model, MaxTurns: p.TurnLimit(),
+			Timeout: p.TimeLimit(), ContextTokens: p.ContextPerJob,
 		}, env, j.systemPrompt, j.taskPrompt, inbox, func(e agent.Event) { s.record(j, e) })
 		stopWatch()
 		s.mu.Lock()
