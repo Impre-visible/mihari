@@ -70,6 +70,12 @@ export enum Kind {
     VLLMMLX = "vllm-mlx",
     Ollama = "ollama",
     LMStudio = "lmstudio",
+
+    /**
+     * A remote OpenAI-compatible API, OpenCode Zen by default, for development
+     * machines too small to run a model.
+     */
+    OpenCode = "opencode",
 };
 
 /**
@@ -98,3 +104,11 @@ export enum Presence {
      */
     PresenceUnknown = "unknown",
 };
+
+/**
+ * Remote is the OpenAI-compatible API the OpenCode engine sends requests to.
+ */
+export interface Remote {
+    "url": string;
+    "hasKey": boolean;
+}

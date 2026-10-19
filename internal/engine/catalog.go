@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+
+	"github.com/Impre-visible/mihari/internal/devmode"
 )
 
 type Kind string
@@ -15,6 +17,9 @@ const (
 	VLLMMLX     Kind = "vllm-mlx"
 	Ollama      Kind = "ollama"
 	LMStudio    Kind = "lmstudio"
+	// A remote OpenAI-compatible API, OpenCode Zen by default, for development
+	// machines too small to run a model.
+	OpenCode Kind = "opencode"
 )
 
 // Info describes an engine for the profiles screen.
@@ -72,6 +77,11 @@ func catalog() []Info {
 			Install:   "Installe LM Studio depuis lmstudio.ai, puis lance-le une fois pour installer la commande lms.",
 			ModelHint: "qwen/qwen3-32b",
 		},
+		{
+			Kind: OpenCode, Label: "OpenCode Zen (dev, distant)", Supported: devmode.Enabled,
+			Install:   "Renseigne une clé API OpenCode Zen (opencode.ai/auth) dans la page Dev.",
+			ModelHint: "kimi-k2.6",
+		},
 	}
 }
 
@@ -112,6 +122,11 @@ func lookPath(name string) string {
 func Catalog() []Info {
 	infos := catalog()
 	for i := range infos {
+		if infos[i].Kind == OpenCode {
+			// Nothing to install, only a key to set.
+			infos[i].Installed = devmode.Enabled && remoteKey() != ""
+			continue
+		}
 		infos[i].Path = lookPath(binary(infos[i].Kind))
 		infos[i].Installed = infos[i].Path != ""
 	}

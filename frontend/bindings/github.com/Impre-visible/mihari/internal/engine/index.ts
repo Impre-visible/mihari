@@ -14,5 +14,6 @@ export {
 
 export type {
     Download,
-    Info
+    Info,
+    Remote
 } from "./models.js";
