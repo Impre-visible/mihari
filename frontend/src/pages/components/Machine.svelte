@@ -6,7 +6,8 @@
     Recommendation,
   } from "../../../bindings/github.com/Impre-visible/mihari/internal/advisor/models";
   import { Service as Settings } from "../../../bindings/github.com/Impre-visible/mihari/internal/settings";
-  import { FormGroup, FormRow, Select, Spinner, Stepper } from "$lib/ui";
+  import { FormGroup, FormRow, Select, Spinner, SteppedSlider, Stepper } from "$lib/ui";
+  import { CONTEXT_STEPS, tokens } from "$lib/context";
 
   type Status =
     | { kind: "idle" }
@@ -162,7 +163,7 @@
     <Stepper id="machine-jobs" class="w-20" min={1} max={64} step={1} bind:value={jobs} />
   </FormRow>
   <FormRow label="Contexte par job (tokens)" for="machine-context">
-    <Stepper id="machine-context" class="w-28" min={4096} step={4096} bind:value={contextPerJob} />
+    <SteppedSlider id="machine-context" steps={CONTEXT_STEPS} format={tokens} bind:value={contextPerJob} />
   </FormRow>
 </FormGroup>
 

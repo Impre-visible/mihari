@@ -18,6 +18,7 @@ export { default as SidebarItem } from "./SidebarItem.svelte";
 export { default as SidebarSection } from "./SidebarSection.svelte";
 export { default as Slider } from "./Slider.svelte";
 export { default as Spinner } from "./Spinner.svelte";
+export { default as SteppedSlider } from "./SteppedSlider.svelte";
 export { default as Stepper } from "./Stepper.svelte";
 export { default as Switch } from "./Switch.svelte";
 export { default as TextArea } from "./TextArea.svelte";
