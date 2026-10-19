@@ -11,6 +11,7 @@
     Switch,
     TextArea,
     TextField,
+    TimeField,
   } from "$lib/ui";
   import { CONTEXT_STEPS, tokens } from "$lib/context";
   import { live } from "$lib/live.svelte";
@@ -172,9 +173,9 @@
       {@const err = segmentProblem(s)}
       <div class="p-form-row flex-wrap gap-x-3 gap-y-1 py-2">
         <div class="flex items-center gap-2">
-          <TextField type="time" aria-label="Début" bind:value={s.start} />
+          <TimeField aria-label="Début" bind:value={s.start} />
           <span class="p-body text-secondary-label">à</span>
-          <TextField type="time" aria-label="Fin" bind:value={s.end} />
+          <TimeField aria-label="Fin" bind:value={s.end} />
         </div>
         <div class="flex flex-1 gap-1" role="group" aria-label="Jours">
           {#each WEEK as w (w.day)}

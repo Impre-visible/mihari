@@ -26,6 +26,7 @@ export { default as Stepper } from "./Stepper.svelte";
 export { default as Switch } from "./Switch.svelte";
 export { default as TextArea } from "./TextArea.svelte";
 export { default as TextField } from "./TextField.svelte";
+export { default as TimeField } from "./TimeField.svelte";
 export { default as Toolbar } from "./Toolbar.svelte";
 export { default as ToolbarButton } from "./ToolbarButton.svelte";
 export { default as ToolbarDivider } from "./ToolbarDivider.svelte";
