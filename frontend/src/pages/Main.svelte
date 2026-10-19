@@ -14,6 +14,9 @@
   import UpdateBanner from "./components/UpdateBanner.svelte";
   import { Events } from "@wailsio/runtime";
   import { nav } from "$lib/nav.svelte";
+  // PROTOTYPE (UI redesign): the new shell, in dev builds until a variant wins.
+  import PrototypeMain from "./prototype/PrototypeMain.svelte";
+  import { proto } from "./prototype/state.svelte";
 
   type Section = { id: string; label: string; icon: typeof GaugeIcon; component: Component };
 
@@ -45,6 +48,9 @@
   );
 </script>
 
+{#if proto.enabled}
+  <PrototypeMain />
+{:else}
 <AppWindow title={active.label}>
   {#snippet sidebar()}
     <Sidebar label="Sections">
@@ -89,3 +95,11 @@
   <UpdateBanner />
   <active.component />
 </AppWindow>
+  {#if import.meta.env.DEV}
+    <button
+      type="button"
+      class="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-black/85 px-3 py-1 text-[12px] text-white shadow-xl"
+      onclick={() => (proto.enabled = true)}>Voir le prototype</button
+    >
+  {/if}
+{/if}
