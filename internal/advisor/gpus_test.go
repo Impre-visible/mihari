@@ -55,3 +55,47 @@ func TestWindowsGPUs(t *testing.T) {
 		t.Errorf("%+v", gpus)
 	}
 }
+
+// Each chip lists its sizes smallest first, once each: pciGPU takes the
+// first one when the size cannot be read.
+func TestPCITableOrder(t *testing.T) {
+	last := map[string]int64{}
+	for _, e := range pciTable {
+		if prev, ok := last[e.id]; ok && e.vram <= prev {
+			t.Errorf("%s: %d GB after %d GB", e.id, e.vram, prev)
+		}
+		last[e.id] = e.vram
+		if e.bw <= 0 || e.name == "" {
+			t.Errorf("%s: incomplete entry", e.id)
+		}
+	}
+}
+
+func TestNvidiaBandwidth(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		vram int64
+		want float64
+	}{
+		{"NVIDIA GeForce RTX 4090", 24, 1008},
+		{"NVIDIA GeForce RTX 4070 Ti SUPER", 16, 672},
+		{"NVIDIA GeForce RTX 3060", 12, 360},
+		{"NVIDIA GeForce RTX 3060", 8, 240},
+		{"NVIDIA GeForce RTX 3080", 12, 912},
+		{"NVIDIA GeForce RTX 3080", 10, 760},
+		{"NVIDIA A100-PCIE-40GB", 40, 1555},
+		{"NVIDIA A100 80GB PCIe", 80, 1935},
+		{"NVIDIA H100 PCIe", 80, 2000},
+		{"NVIDIA L40S", 48, 864},
+		{"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition", 96, 1792},
+		// Word boundaries: an A1000 is not an A100, nor an A10.
+		{"NVIDIA RTX A1000", 8, 0},
+		// Laptop GPUs share the desktop names with slower memory.
+		{"NVIDIA GeForce RTX 4090 Laptop GPU", 16, 0},
+		{"NVIDIA GeForce RTX 2080 with Max-Q Design", 8, 0},
+	} {
+		if got := nvidiaBandwidth(c.name, c.vram*gb); got != c.want {
+			t.Errorf("%s %d GB: %.0f GB/s, want %.0f", c.name, c.vram, got, c.want)
+		}
+	}
+}
