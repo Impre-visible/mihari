@@ -4,6 +4,16 @@ Mihari (見張り, « sentinelle » en japonais) est une application de bureau q
 
 > Projet en cours de développement (V1). La supervision centralisée n'est pas encore implémentée.
 
+## Aperçu
+
+| Accueil | Agent : profils et semaine |
+|---|---|
+| ![Écran d'accueil, avec la puce détectée](docs/screenshots/accueil.png) | ![Page Agent, profils Jour et Nuit et planning de la semaine](docs/screenshots/agent.png) |
+
+| Préréglage sur Mac Apple Silicon | Préréglage sur PC |
+|---|---|
+| ![Préréglage pour un Mac M5 Ultra de 256 Go](docs/screenshots/prereglage-mac.png) | ![Préréglage calculé pour une Radeon RX 7900 XTX](docs/screenshots/prereglage-pc.png) |
+
 ## Fonctionnalités
 
 ### V1
@@ -194,6 +204,7 @@ Chaque merge request n'est relue qu'une fois par commit (clé : projet, IID, SHA
 ```
 .
 ├── build/           fichiers de packaging par plateforme
+├── docs/            captures d'écran du README
 ├── frontend/        interface Svelte
 ├── main.go          point d'entrée de l'application
 ├── Taskfile.yml     tâches de build Wails
