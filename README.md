@@ -172,7 +172,13 @@ Au premier lancement sur un Mac Apple Silicon, l'étape Modèle lit la puce (`ma
 | 192 à 256 Go | `DeepSeek-V4-Flash-8bit` | 7 jobs × 64K | 3 jobs × 128K |
 | 512 Go | `deepseek-ai-DeepSeek-V4-Flash-8bit` | 8 jobs × 64K | 4 jobs × 128K |
 
-Le profil Jour relit les MR en semaine de 8 h 30 à 17 h ; le profil Nuit écrit les tests des issues étiquetées `mihari::tests` le reste du temps. Sous 36 Go, sur un PC ou via « Personnaliser manuellement », l'étape reprend le conseiller générique.
+Le profil Jour relit les MR en semaine de 8 h 30 à 17 h ; le profil Nuit écrit les tests des issues étiquetées `mihari::tests` le reste du temps.
+
+### Préréglages PC
+
+Sur Linux et Windows, le préréglage est calculé à partir des GPU détectés : NVIDIA par `nvidia-smi`, AMD Radeon et Intel Arc (séries A et B) par leur identifiant PCI (`/sys/class/drm` sous Linux, pilotes du registre sous Windows). Pour chaque profil, Mihari retient le meilleur modèle du catalogue qui tient entièrement en VRAM, sans jamais déborder en RAM, à au moins 20 tok/s par job le jour et 10 la nuit, avec les tailles réelles lues sur Hugging Face. La nuit garde 128K de contexte, ou descend à 64K si ça permet un meilleur modèle.
+
+Sans GPU, avec une carte absente des tables (débit mémoire inconnu), sous 36 Go sur Mac ou via « Personnaliser manuellement », l'étape reprend le conseiller générique.
 
 ## Fonctionnement côté GitLab
 

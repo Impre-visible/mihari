@@ -1,8 +1,12 @@
 package advisor
 
 import (
+	"cmp"
 	"context"
+	"fmt"
+	"math"
 	"regexp"
+	"slices"
 	"sync"
 
 	"github.com/Impre-visible/mihari/internal/engine"
@@ -41,16 +45,21 @@ type Slot struct {
 	ContextPerJob int    `json:"contextPerJob"`
 	// Bytes of weights read on Hugging Face; 0 when unknown.
 	Weights int64 `json:"weights"`
+	// Estimated generation speed of one job; 0 when not estimated (Mac presets).
+	TokensPerSecond float64 `json:"tokensPerSecond"`
 }
 
-// Preset is the day and night setup for a Mac's amount of unified memory.
+// Preset is the day and night setup of a machine: from a table on a Mac,
+// computed from the GPUs on a PC.
 type Preset struct {
-	// The memory range it is meant for, as shown to the user.
-	Tier   string      `json:"tier"`
-	Engine engine.Kind `json:"engine"`
-	Day    Slot        `json:"day"`
-	Night  Slot        `json:"night"`
-	// Memory left to macOS, and what remains for the models.
+	// The memory it is meant for, as shown to the user.
+	Tier      string      `json:"tier"`
+	Engine    engine.Kind `json:"engine"`
+	ExtraArgs string      `json:"extraArgs"`
+	Day       Slot        `json:"day"`
+	Night     Slot        `json:"night"`
+	// Memory left to the system, and what remains for the models: unified
+	// memory on a Mac, VRAM on a PC.
 	Reserved int64 `json:"reserved"`
 	Budget   int64 `json:"budget"`
 }
@@ -91,6 +100,19 @@ func reserved(ram int64) int64 {
 	return min(max(ram/5, 15*gb), 25*gb)
 }
 
+// presetFor returns the machine's preset, or false when it has none and goes
+// through the generic advisor.
+func presetFor(ctx context.Context, h Hardware) (Preset, bool) {
+	if h.AppleSilicon() {
+		p, ok := PresetFor(h)
+		if ok {
+			p = withWeights(ctx, p)
+		}
+		return p, ok
+	}
+	return pcPreset(ctx, h)
+}
+
 // PresetFor returns the preset of an Apple Silicon Mac, or false on any other
 // machine or below 36 GB, which go through the generic advisor.
 func PresetFor(h Hardware) (Preset, bool) {
@@ -100,7 +122,7 @@ func PresetFor(h Hardware) (Preset, bool) {
 	for _, t := range tiers {
 		if h.RAM >= t.min*gb {
 			keep := reserved(h.RAM)
-			return Preset{Tier: t.name, Engine: engine.VLLMMLX, Day: t.day, Night: t.night, Reserved: keep, Budget: h.RAM - keep}, true
+			return Preset{Tier: t.name, Engine: engine.VLLMMLX, ExtraArgs: "--use-paged-cache", Day: t.day, Night: t.night, Reserved: keep, Budget: h.RAM - keep}, true
 		}
 	}
 	return Preset{}, false
@@ -118,4 +140,82 @@ func withWeights(ctx context.Context, p Preset) Preset {
 	}
 	wg.Wait()
 	return p
+}
+
+// Slowest estimated speed of one job each profile accepts, in tokens per
+// second: reviews are read by people waiting on them, tests by nobody.
+const (
+	dayMinSpeed   = 20
+	nightMinSpeed = 10
+)
+
+// pcPreset picks, for each profile, the best model that fits entirely in
+// VRAM, never spilling into RAM, and runs fast enough. It needs every GPU's
+// bandwidth to estimate the speed, and gives up rather than guess.
+func pcPreset(ctx context.Context, h Hardware) (Preset, bool) {
+	if len(h.GPUs) == 0 {
+		return Preset{}, false
+	}
+	for _, g := range h.GPUs {
+		if g.Bandwidth == 0 {
+			return Preset{}, false
+		}
+	}
+	b := budgetOf(h)
+	// Jobs and context per job for the day, jobs for the night.
+	var dayJobs, dayContext, nightJobs int
+	switch vram := b.GPU / gb; {
+	case vram < 16:
+		dayJobs, dayContext, nightJobs = 1, 32768, 1
+	case vram < 32:
+		dayJobs, dayContext, nightJobs = 2, 32768, 1
+	case vram < 64:
+		dayJobs, dayContext, nightJobs = 4, 49152, 2
+	default:
+		dayJobs, dayContext, nightJobs = 6, 65536, 3
+	}
+	day, ok := pick(Recommend(ctx, h, dayJobs, dayContext), dayMinSpeed)
+	if !ok {
+		return Preset{}, false
+	}
+	// The night takes 128K when that costs no quality, 64K otherwise: a
+	// smaller model than the day's would write worse tests.
+	var night Recommendation
+	nightContext := 0
+	for _, c := range []int{131072, 65536} {
+		if r, ok := pick(Recommend(ctx, h, nightJobs, c), nightMinSpeed); ok && r.Quality > night.Quality {
+			night, nightContext = r, c
+		}
+	}
+	if nightContext == 0 {
+		return Preset{}, false
+	}
+	slot := func(r Recommendation, jobs, perJob int) Slot {
+		return Slot{Model: r.Ref, Jobs: jobs, ContextPerJob: perJob, Weights: r.Weights, TokensPerSecond: r.TokensPerSecond}
+	}
+	return Preset{
+		Tier:   fmt.Sprintf("%d Go de VRAM", int64(math.Round(float64(h.VRAM())/gb))),
+		Engine: engine.LlamaServer, ExtraArgs: day.ExtraArgs,
+		Day: slot(day, dayJobs, dayContext), Night: slot(night, nightJobs, nightContext),
+		Reserved: h.VRAM() - b.GPU, Budget: b.GPU,
+	}, true
+}
+
+// pick returns the best quantization of any model that stays in VRAM at
+// minSpeed or more.
+func pick(recs []Recommendation, minSpeed float64) (Recommendation, bool) {
+	var fits []Recommendation
+	for _, r := range recs {
+		for _, q := range append([]Recommendation{r}, r.Alternatives...) {
+			if q.Spill == 0 && q.TokensPerSecond >= minSpeed {
+				fits = append(fits, q)
+			}
+		}
+	}
+	if len(fits) == 0 {
+		return Recommendation{}, false
+	}
+	return slices.MinFunc(fits, func(a, b Recommendation) int {
+		return cmp.Or(cmp.Compare(b.Quality, a.Quality), cmp.Compare(b.TokensPerSecond, a.TokensPerSecond))
+	}), true
 }

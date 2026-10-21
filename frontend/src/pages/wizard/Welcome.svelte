@@ -10,10 +10,14 @@
   let mihariVersion = $state("");
   Updates.Status().then((i) => (mihariVersion = "v" + i.current));
 
-  // On an Apple Silicon Mac, the chip and its memory, which the setup's model step builds on.
+  // The chip and its memory on a Mac, the GPUs on a PC: what the setup's model step builds on.
   let detected = $state("");
   Advisor.Machine().then(({ hardware: h }) => {
-    if (h.unified && h.cpu) detected = `Puce ${h.cpu} détectée avec ${Math.round(h.ram / 2 ** 30)} Go de mémoire unifiée`;
+    const go = (bytes: number) => `${Math.round(bytes / 2 ** 30)} Go`;
+    const gpus = h.gpus ?? [];
+    if (h.unified && h.cpu) detected = `Puce ${h.cpu} détectée avec ${go(h.ram)} de mémoire unifiée`;
+    else if (gpus.length > 0)
+      detected = `GPU ${gpus.map((g) => g.name).join(" + ")} détecté${gpus.length > 1 ? "s" : ""} avec ${go(gpus.reduce((s, g) => s + g.vram, 0))} de VRAM`;
   });
 
   // The macOS "Welcome to…" sheet: a few features, each a glyph, a title and a sentence.

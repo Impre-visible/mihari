@@ -127,25 +127,21 @@ type Onboarding struct {
 	Hardware Hardware `json:"hardware"`
 	// The Apple Silicon chip, such as "Apple M5 Ultra"; "" on any other machine.
 	Chip string `json:"chip"`
-	// The day and night setup for this Mac; nil sends the user to the generic advisor.
+	// The day and night setup for this machine; nil sends the user to the generic advisor.
 	Preset *Preset     `json:"preset"`
 	Engine engine.Info `json:"engine"`
 }
 
-// Onboarding detects the machine and, on an Apple Silicon Mac, the preset that suits it.
+// Onboarding detects the machine and the preset that suits it, if any.
 func (s *Service) Onboarding() Onboarding {
 	o := s.Machine()
 	out := Onboarding{Hardware: o.Hardware, Engine: o.Engine}
-	if !o.Hardware.AppleSilicon() {
-		return out
-	}
-	if c, ok := ParseChip(o.Hardware.CPU); ok {
+	if c, ok := ParseChip(o.Hardware.CPU); ok && o.Hardware.AppleSilicon() {
 		out.Chip = c.String()
 	}
-	if p, ok := PresetFor(o.Hardware); ok {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		p = withWeights(ctx, p)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if p, ok := presetFor(ctx, o.Hardware); ok {
 		out.Preset = &p
 	}
 	return out
@@ -154,11 +150,13 @@ func (s *Service) Onboarding() Onboarding {
 // Label of the issues the night profile turns into tests.
 const NightLabel = "mihari::tests"
 
-// ApplyPreset writes this Mac's preset into a Jour and a Nuit profile, made
+// ApplyPreset writes this machine's preset into a Jour and a Nuit profile, made
 // or updated by name, and replaces the schedule: Jour on weekdays from 08:30
 // to 17:00, Nuit every other hour. A prompt already set is kept.
 func (s *Service) ApplyPreset(dayPrompt, nightPrompt string) (Preset, error) {
-	p, ok := PresetFor(Detect(context.Background()))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	p, ok := presetFor(ctx, Detect(ctx))
 	if !ok {
 		return Preset{}, errors.New("aucun préréglage pour cette machine")
 	}
@@ -197,7 +195,7 @@ func (s *Service) applyPreset(p Preset, dayPrompt, nightPrompt string) error {
 		target["model"] = slot.slot.Model
 		target["maxJobs"] = slot.slot.Jobs
 		target["contextPerJob"] = slot.slot.ContextPerJob
-		target["extraArgs"] = "--use-paged-cache"
+		target["extraArgs"] = p.ExtraArgs
 		ids[slot.name] = target["id"].(string)
 	}
 

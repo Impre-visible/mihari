@@ -68,7 +68,7 @@ export interface Onboarding {
     "chip": string;
 
     /**
-     * The day and night setup for this Mac; nil sends the user to the generic advisor.
+     * The day and night setup for this machine; nil sends the user to the generic advisor.
      */
     "preset": Preset | null;
     "engine": engine$0.Info;
@@ -85,19 +85,22 @@ export interface Overview {
 }
 
 /**
- * Preset is the day and night setup for a Mac's amount of unified memory.
+ * Preset is the day and night setup of a machine: from a table on a Mac,
+ * computed from the GPUs on a PC.
  */
 export interface Preset {
     /**
-     * The memory range it is meant for, as shown to the user.
+     * The memory it is meant for, as shown to the user.
      */
     "tier": string;
     "engine": engine$0.Kind;
+    "extraArgs": string;
     "day": Slot;
     "night": Slot;
 
     /**
-     * Memory left to macOS, and what remains for the models.
+     * Memory left to the system, and what remains for the models: unified
+     * memory on a Mac, VRAM on a PC.
      */
     "reserved": number;
     "budget": number;
@@ -154,4 +157,9 @@ export interface Slot {
      * Bytes of weights read on Hugging Face; 0 when unknown.
      */
     "weights": number;
+
+    /**
+     * Estimated generation speed of one job; 0 when not estimated (Mac presets).
+     */
+    "tokensPerSecond": number;
 }

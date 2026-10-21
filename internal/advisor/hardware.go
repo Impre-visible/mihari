@@ -78,7 +78,7 @@ func Detect(ctx context.Context) Hardware {
 		}
 	}
 	if !h.Unified {
-		h.GPUs = nvidiaGPUs(ctx)
+		h.GPUs = append(nvidiaGPUs(ctx), otherGPUs(ctx)...)
 	}
 	return h
 }

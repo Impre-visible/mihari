@@ -10,8 +10,9 @@
   import { reload } from "../agent/store.svelte";
   import Machine from "../agent/MachineInspector.svelte";
 
-  // On an Apple Silicon Mac, the day and night setup that suits its memory,
-  // applied in one click; anywhere else, or on request, the generic advisor.
+  // The day and night setup that suits the machine, applied in one click: from
+  // its memory on a Mac, from its GPUs on a PC. Without one, or on request,
+  // the generic advisor.
   type Props = { onapplied: (profileId: string | null) => void };
   let { onapplied }: Props = $props();
 
@@ -28,7 +29,18 @@
     });
 
   function size(bytes: number) {
-    return `${Math.round(bytes / 2 ** 30)} Go`;
+    return `${(bytes / 2 ** 30).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} Go`;
+  }
+
+  // "Puce Apple M5 Ultra détectée…", or the GPUs of a PC.
+  function detected(o: Onboarding) {
+    const h = o.hardware;
+    if (h.unified) return `Puce ${o.chip || h.cpu} détectée avec ${size(h.ram)} de mémoire unifiée`;
+    const gpus = h.gpus ?? [];
+    const names = [...new Set(gpus.map((g) => g.name))];
+    const label = names.length === 1 && gpus.length > 1 ? `${gpus.length} × ${names[0]}` : names.join(" + ");
+    const vram = gpus.reduce((sum, g) => sum + g.vram, 0);
+    return `GPU ${label} détecté${gpus.length > 1 ? "s" : ""} avec ${size(vram)} de VRAM`;
   }
 
   function prompt(id: string) {
@@ -66,6 +78,9 @@
       label="Contexte alloué"
       detail="{tokens(s.contextPerJob * s.jobs)} tokens{s.weights ? ` · poids ${size(s.weights)}` : ''}"
     />
+    {#if s.tokensPerSecond}
+      <FormRow label="Vitesse estimée" detail="~{Math.round(s.tokensPerSecond)} tok/s par job" />
+    {/if}
   </FormGroup>
 {/snippet}
 
@@ -83,16 +98,16 @@
   <div class="p-form-group flex items-center gap-3 px-4 py-3">
     <CpuIcon size={28} class="shrink-0 text-accent" aria-hidden="true" />
     <div class="min-w-0">
-      <p class="p-headline-2">Puce {onboarding.chip || h.cpu} détectée avec {size(h.ram)} de mémoire unifiée</p>
+      <p class="p-headline-2">{detected(onboarding)}</p>
       <p class="p-subhead-2 text-secondary-label">
-        {h.model ? `${h.model} · ` : ""}{h.cores} cœurs · préréglage {p.tier}
+        {h.model ? `${h.model} · ` : ""}{h.unified ? `${h.cores} cœurs` : h.cpu} · préréglage {p.tier}
       </p>
     </div>
   </div>
 
   <FormGroup title="Mémoire" class="mt-6">
-    <FormRow label="Réservée à macOS" detail={size(p.reserved)} />
-    <FormRow label="Pour les modèles" detail={size(p.budget)} />
+    <FormRow label={h.unified ? "Réservée à macOS" : "Réservée au pilote"} detail={size(p.reserved)} />
+    <FormRow label={h.unified ? "Pour les modèles" : "VRAM pour les modèles"} detail={size(p.budget)} />
     <div class="p-form-row gap-1.5">
       <span class="p-form-row-label">Moteur</span>
       {#if onboarding.engine.installed}
