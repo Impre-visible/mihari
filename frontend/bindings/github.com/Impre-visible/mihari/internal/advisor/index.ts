@@ -10,6 +10,9 @@ export type {
     Budget,
     GPU,
     Hardware,
+    Onboarding,
     Overview,
-    Recommendation
+    Preset,
+    Recommendation,
+    Slot
 } from "./models.js";

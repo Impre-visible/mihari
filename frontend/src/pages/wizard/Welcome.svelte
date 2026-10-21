@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { GitMergeIcon, ShieldCheckIcon, TestTubeIcon } from "phosphor-svelte";
+  import { CpuIcon, GitMergeIcon, ShieldCheckIcon, TestTubeIcon } from "phosphor-svelte";
+  import { Service as Advisor } from "../../../bindings/github.com/Impre-visible/mihari/internal/advisor";
   import { Service as Updates } from "../../../bindings/github.com/Impre-visible/mihari/internal/updates";
   import { AppWindow, Button } from "$lib/ui";
   import logo from "$lib/logo-icon.svg";
@@ -8,6 +9,16 @@
 
   let mihariVersion = $state("");
   Updates.Status().then((i) => (mihariVersion = "v" + i.current));
+
+  // The chip and its memory on a Mac, the GPUs on a PC: what the setup's model step builds on.
+  let detected = $state("");
+  Advisor.Machine().then(({ hardware: h }) => {
+    const go = (bytes: number) => `${Math.round(bytes / 2 ** 30)} Go`;
+    const gpus = h.gpus ?? [];
+    if (h.unified && h.cpu) detected = `Puce ${h.cpu} détectée avec ${go(h.ram)} de mémoire unifiée`;
+    else if (gpus.length > 0)
+      detected = `GPU ${gpus.map((g) => g.name).join(" + ")} détecté${gpus.length > 1 ? "s" : ""} avec ${go(gpus.reduce((s, g) => s + g.vram, 0))} de VRAM`;
+  });
 
   // The macOS "Welcome to…" sheet: a few features, each a glyph, a title and a sentence.
   const features = [
@@ -46,6 +57,13 @@
         </li>
       {/each}
     </ul>
+
+    {#if detected}
+      <p class="p-subhead-2 mt-8 flex items-center gap-2 rounded-lg px-3 py-2 text-left text-secondary-label ring-1 ring-(--p-sys-gray)">
+        <CpuIcon size={18} class="shrink-0 text-accent" aria-hidden="true" />
+        {detected}
+      </p>
+    {/if}
 
     <Button variant="primary" size="large" class="mt-10 min-w-48" onclick={onstart}>Configurer</Button>
     <Button variant="borderless" class="mt-2" onclick={onskip}>Plus tard</Button>

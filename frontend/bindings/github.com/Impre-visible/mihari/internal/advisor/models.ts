@@ -35,6 +35,11 @@ export interface GPU {
 export interface Hardware {
     "os": string;
     "arch": string;
+
+    /**
+     * Machine identifier, such as Mac16,8 on a Mac; "" elsewhere.
+     */
+    "model": string;
     "cpu": string;
     "cores": number;
     "ram": number;
@@ -51,6 +56,24 @@ export interface Hardware {
     "ramBandwidth": number;
 }
 
+/**
+ * Onboarding is what the first launch shows of the machine.
+ */
+export interface Onboarding {
+    "hardware": Hardware;
+
+    /**
+     * The Apple Silicon chip, such as "Apple M5 Ultra"; "" on any other machine.
+     */
+    "chip": string;
+
+    /**
+     * The day and night setup for this machine; nil sends the user to the generic advisor.
+     */
+    "preset": Preset | null;
+    "engine": engine$0.Info;
+}
+
 export interface Overview {
     "hardware": Hardware;
     "budget": Budget;
@@ -59,6 +82,28 @@ export interface Overview {
      * The engine recommendations use here, and whether it is installed.
      */
     "engine": engine$0.Info;
+}
+
+/**
+ * Preset is the day and night setup of a machine: from a table on a Mac,
+ * computed from the GPUs on a PC.
+ */
+export interface Preset {
+    /**
+     * The memory it is meant for, as shown to the user.
+     */
+    "tier": string;
+    "engine": engine$0.Kind;
+    "extraArgs": string;
+    "day": Slot;
+    "night": Slot;
+
+    /**
+     * Memory left to the system, and what remains for the models: unified
+     * memory on a Mac, VRAM on a PC.
+     */
+    "reserved": number;
+    "budget": number;
 }
 
 /**
@@ -98,4 +143,23 @@ export interface Recommendation {
      * The model's other quantizations that fit, best first.
      */
     "alternatives": Recommendation[] | null;
+}
+
+/**
+ * Slot is what one profile of a preset runs.
+ */
+export interface Slot {
+    "model": string;
+    "jobs": number;
+    "contextPerJob": number;
+
+    /**
+     * Bytes of weights read on Hugging Face; 0 when unknown.
+     */
+    "weights": number;
+
+    /**
+     * Estimated generation speed of one job; 0 when not estimated (Mac presets).
+     */
+    "tokensPerSecond": number;
 }
