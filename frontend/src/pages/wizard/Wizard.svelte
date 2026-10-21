@@ -7,7 +7,7 @@
   import Connection from "../gitlab/Connection.svelte";
   import GitLabPage from "../gitlab/GitLab.svelte";
   import Agent from "../agent/Agent.svelte";
-  import Machine from "../agent/MachineInspector.svelte";
+  import Preset from "./Preset.svelte";
   import Check from "./Check.svelte";
 
   let { ondone }: { ondone: () => void } = $props();
@@ -20,7 +20,7 @@
   const steps: Step[] = [
     { label: "GitLab", title: "Connecte GitLab", hint: "L'instance et le compte du bot", component: Connection },
     { label: "Projets", title: "Choisis les projets", hint: "Allume ceux où le bot travaille", component: GitLabPage, full: true },
-    { label: "Modèle", title: "Choisis un modèle", hint: "Selon ce que la machine peut faire tourner", component: Machine },
+    { label: "Modèle", title: "Choisis un modèle", hint: "Selon ce que la machine peut faire tourner", component: Preset },
     { label: "Profil", title: "Règle le profil", hint: "Prompt, modèle et heures de travail", component: Agent, full: true },
     { label: "Vérification", title: "Tout est prêt ?", hint: "Ce qu'il faut au bot pour travailler", component: Check },
   ];

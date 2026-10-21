@@ -22,8 +22,10 @@ type GPU struct {
 }
 
 type Hardware struct {
-	OS    string `json:"os"`
-	Arch  string `json:"arch"`
+	OS   string `json:"os"`
+	Arch string `json:"arch"`
+	// Machine identifier, such as Mac16,8 on a Mac; "" elsewhere.
+	Model string `json:"model"`
 	CPU   string `json:"cpu"`
 	Cores int    `json:"cores"`
 	RAM   int64  `json:"ram"`
@@ -56,6 +58,7 @@ func Detect(ctx context.Context) Hardware {
 	case "darwin":
 		h.RAM, _ = strconv.ParseInt(sysctl(ctx, "hw.memsize"), 10, 64)
 		h.CPU = sysctl(ctx, "machdep.cpu.brand_string")
+		h.Model = sysctl(ctx, "hw.model")
 		if h.AppleSilicon() {
 			h.Unified = true
 			h.RAMBandwidth = appleBandwidth(h.CPU)

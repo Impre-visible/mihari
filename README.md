@@ -160,6 +160,20 @@ gitlab:
 
 Le token GitLab n'est jamais écrit dans ce fichier : il est stocké dans le trousseau du système.
 
+### Préréglages Apple Silicon
+
+Au premier lancement sur un Mac Apple Silicon, l'étape Modèle lit la puce (`machdep.cpu.brand_string`), l'identifiant (`hw.model`) et la mémoire unifiée (`hw.memsize`), puis propose un profil Jour et un profil Nuit sur `vllm-mlx`. macOS garde un cinquième de la mémoire, entre 15 et 25 Go.
+
+| Mémoire | Modèle | Jour | Nuit |
+|---|---|---|---|
+| 36 à 48 Go | `Qwen2.5-Coder-14B-Instruct-8bit` le jour, `Qwen2.5-Coder-32B-Instruct-4bit` la nuit | 2 jobs × 32K | 1 job × 64K |
+| 64 à 96 Go | `Qwen3-Coder-30B-A3B-Instruct-8bit` | 4 jobs × 48K | 2 jobs × 96K |
+| 128 Go | `Qwen3-Coder-Next-8bit` | 5 jobs × 64K | 2 jobs × 128K |
+| 192 à 256 Go | `DeepSeek-V4-Flash-8bit` | 7 jobs × 64K | 3 jobs × 128K |
+| 512 Go | `deepseek-ai-DeepSeek-V4-Flash-8bit` | 8 jobs × 64K | 4 jobs × 128K |
+
+Le profil Jour relit les MR en semaine de 8 h 30 à 17 h ; le profil Nuit écrit les tests des issues étiquetées `mihari::tests` le reste du temps. Sous 36 Go, sur un PC ou via « Personnaliser manuellement », l'étape reprend le conseiller générique.
+
 ## Fonctionnement côté GitLab
 
 1. Créer un compte bot sur l'instance GitLab et lui donner accès aux projets à relire.

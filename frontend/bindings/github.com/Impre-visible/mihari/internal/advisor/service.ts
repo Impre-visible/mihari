@@ -23,10 +23,26 @@ export function Apply(profileID: string, r: $models.Recommendation, jobs: number
 }
 
 /**
+ * ApplyPreset writes this Mac's preset into a Jour and a Nuit profile, made
+ * or updated by name, and replaces the schedule: Jour on weekdays from 08:30
+ * to 17:00, Nuit every other hour. A prompt already set is kept.
+ */
+export function ApplyPreset(dayPrompt: string, nightPrompt: string): $CancellablePromise<$models.Preset> {
+    return $Call.ByID(4207768718, dayPrompt, nightPrompt);
+}
+
+/**
  * Machine describes the hardware and how much of it models may use.
  */
 export function Machine(): $CancellablePromise<$models.Overview> {
     return $Call.ByID(1259445120);
+}
+
+/**
+ * Onboarding detects the machine and, on an Apple Silicon Mac, the preset that suits it.
+ */
+export function Onboarding(): $CancellablePromise<$models.Onboarding> {
+    return $Call.ByID(1824443770);
 }
 
 /**

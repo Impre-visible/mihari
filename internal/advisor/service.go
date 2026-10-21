@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Impre-visible/mihari/internal/engine"
@@ -64,16 +65,9 @@ func (s *Service) Recommend(jobs, contextPerJob int) ([]Recommendation, error) {
 // profileID is "", and returns the profile's id. The prompt is left alone.
 func (s *Service) Apply(profileID string, r Recommendation, jobs, contextPerJob int) (string, error) {
 	store := &settings.Service{}
-	config, err := store.GetConfig()
+	list, err := storedProfiles(store)
 	if err != nil {
 		return "", err
-	}
-	var list []map[string]any
-	if raw, ok := config["profiles"]; ok && raw != nil {
-		data, _ := json.Marshal(raw)
-		if err := json.Unmarshal(data, &list); err != nil {
-			return "", fmt.Errorf("profils illisibles : %w", err)
-		}
 	}
 
 	var target map[string]any
@@ -87,10 +81,7 @@ func (s *Service) Apply(profileID string, r Recommendation, jobs, contextPerJob 
 			return "", errors.New("profil introuvable")
 		}
 		// Same shape and defaults as a profile made on the Profiles page.
-		target = map[string]any{
-			"id":   strconv.FormatInt(time.Now().UnixMilli(), 36) + strconv.FormatInt(rand.Int64N(1<<30), 36),
-			"name": r.Model, "prompt": "", "trigger": "ping", "label": "", "maxTurns": 50, "maxMinutes": 30,
-		}
+		target = newProfile(r.Model)
 		list = append(list, target)
 	}
 	target["engine"] = string(r.Engine)
@@ -106,4 +97,128 @@ func (s *Service) Apply(profileID string, r Recommendation, jobs, contextPerJob 
 		s.Reload()
 	}
 	return target["id"].(string), nil
+}
+
+func storedProfiles(store *settings.Service) ([]map[string]any, error) {
+	config, err := store.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+	var list []map[string]any
+	if raw, ok := config["profiles"]; ok && raw != nil {
+		data, _ := json.Marshal(raw)
+		if err := json.Unmarshal(data, &list); err != nil {
+			return nil, fmt.Errorf("profils illisibles : %w", err)
+		}
+	}
+	return list, nil
+}
+
+// newProfile has the same shape and defaults as a profile made on the Profiles page.
+func newProfile(name string) map[string]any {
+	return map[string]any{
+		"id":   strconv.FormatInt(time.Now().UnixMilli(), 36) + strconv.FormatInt(rand.Int64N(1<<30), 36),
+		"name": name, "prompt": "", "trigger": "ping", "label": "", "maxTurns": 50, "maxMinutes": 30,
+	}
+}
+
+// Onboarding is what the first launch shows of the machine.
+type Onboarding struct {
+	Hardware Hardware `json:"hardware"`
+	// The Apple Silicon chip, such as "Apple M5 Ultra"; "" on any other machine.
+	Chip string `json:"chip"`
+	// The day and night setup for this Mac; nil sends the user to the generic advisor.
+	Preset *Preset     `json:"preset"`
+	Engine engine.Info `json:"engine"`
+}
+
+// Onboarding detects the machine and, on an Apple Silicon Mac, the preset that suits it.
+func (s *Service) Onboarding() Onboarding {
+	o := s.Machine()
+	out := Onboarding{Hardware: o.Hardware, Engine: o.Engine}
+	if !o.Hardware.AppleSilicon() {
+		return out
+	}
+	if c, ok := ParseChip(o.Hardware.CPU); ok {
+		out.Chip = c.String()
+	}
+	if p, ok := PresetFor(o.Hardware); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		p = withWeights(ctx, p)
+		out.Preset = &p
+	}
+	return out
+}
+
+// Label of the issues the night profile turns into tests.
+const NightLabel = "mihari::tests"
+
+// ApplyPreset writes this Mac's preset into a Jour and a Nuit profile, made
+// or updated by name, and replaces the schedule: Jour on weekdays from 08:30
+// to 17:00, Nuit every other hour. A prompt already set is kept.
+func (s *Service) ApplyPreset(dayPrompt, nightPrompt string) (Preset, error) {
+	p, ok := PresetFor(Detect(context.Background()))
+	if !ok {
+		return Preset{}, errors.New("aucun préréglage pour cette machine")
+	}
+	return p, s.applyPreset(p, dayPrompt, nightPrompt)
+}
+
+func (s *Service) applyPreset(p Preset, dayPrompt, nightPrompt string) error {
+	store := &settings.Service{}
+	list, err := storedProfiles(store)
+	if err != nil {
+		return err
+	}
+	ids := map[string]string{}
+	for _, slot := range []struct {
+		name, prompt, trigger, label string
+		slot                         Slot
+	}{
+		{"Jour", dayPrompt, "ping", "", p.Day},
+		{"Nuit", nightPrompt, "issues", NightLabel, p.Night},
+	} {
+		var target map[string]any
+		for _, existing := range list {
+			if name, _ := existing["name"].(string); strings.EqualFold(strings.TrimSpace(name), slot.name) {
+				target = existing
+			}
+		}
+		if target == nil {
+			target = newProfile(slot.name)
+			target["trigger"], target["label"] = slot.trigger, slot.label
+			list = append(list, target)
+		}
+		if prompt, _ := target["prompt"].(string); strings.TrimSpace(prompt) == "" {
+			target["prompt"] = slot.prompt
+		}
+		target["engine"] = string(p.Engine)
+		target["model"] = slot.slot.Model
+		target["maxJobs"] = slot.slot.Jobs
+		target["contextPerJob"] = slot.slot.ContextPerJob
+		target["extraArgs"] = "--use-paged-cache"
+		ids[slot.name] = target["id"].(string)
+	}
+
+	weekdays := []int{1, 2, 3, 4, 5}
+	everyDay := []int{1, 2, 3, 4, 5, 6, 0}
+	schedule := []map[string]any{
+		{"profile": ids["Jour"], "start": "08:30", "end": "17:00", "days": weekdays},
+		{"profile": ids["Nuit"], "start": "17:00", "end": "08:30", "days": everyDay},
+	}
+	if err := store.Set("profiles", list); err != nil {
+		return err
+	}
+	if err := store.Set("schedule", schedule); err != nil {
+		return err
+	}
+	// Weekend days, which no segment covers, also go to the night profile.
+	if err := store.Set("schedule_fallback", ids["Nuit"]); err != nil {
+		return err
+	}
+	if s.Reload != nil {
+		s.Reload()
+	}
+	return nil
 }
