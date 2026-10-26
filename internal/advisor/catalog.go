@@ -34,11 +34,6 @@ var Catalog = []Model{
 	{Name: "Qwen3.8 Flash Next", Quality: 92, ActiveB: 10, TotalB: 180, KVPerToken: 24576, MaxContext: 262144,
 		GGUF: "unsloth/Qwen3.8-Flash-Next-GGUF", GGUFQuants: []string{"UD-Q4_K_XL", "UD-Q3_K_XL", "UD-Q2_K_XL"},
 		MLX: []MLXRepo{{4, "mlx-community/Qwen3.8-Flash-Next-4bit"}}},
-	// Dense, Llama architecture. Ahead of Qwen3.8 27B on most of the agentic
-	// coding benchmarks its makers published; no MLX build from mlx-community
-	// yet, so Macs run the GGUF.
-	{Name: "Nanbeige4.3 33B", Quality: 87, ActiveB: 33.1, TotalB: 33.1, KVPerToken: 212992, MaxContext: 524288,
-		GGUF: "bartowski/Nanbeige_Nanbeige4.3-33B-GGUF", GGUFQuants: []string{"Q8_0", "Q6_K", "Q4_K_M"}},
 	{Name: "Qwen3.8 27B", Quality: 86, ActiveB: 27.8, TotalB: 27.8, KVPerToken: 65536, MaxContext: 262144,
 		GGUF: "unsloth/Qwen3.8-27B-GGUF", GGUFQuants: []string{"Q8_0", "Q6_K", "Q4_K_M"},
 		MLX: []MLXRepo{{8, "mlx-community/Qwen3.8-27B-8bit"}, {4, "mlx-community/Qwen3.8-27B-4bit"}}},
