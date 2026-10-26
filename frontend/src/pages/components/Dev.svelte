@@ -1,6 +1,9 @@
 <script lang="ts">
-  import { CheckCircleIcon, PaperPlaneRightIcon, TrashIcon, WarningCircleIcon } from "phosphor-svelte";
-  import { Events } from "@wailsio/runtime";
+  import { ArrowSquareOutIcon, AtIcon, CheckCircleIcon, PaperPlaneRightIcon, TrashIcon, WarningCircleIcon } from "phosphor-svelte";
+  import { Browser, Events } from "@wailsio/runtime";
+  import { Service as Devlab } from "../../../bindings/github.com/Impre-visible/mihari/internal/devlab";
+  import type { TestItem, TestProject } from "../../../bindings/github.com/Impre-visible/mihari/internal/gitlab/models";
+  import { load as loadGitLab } from "../gitlab/store.svelte";
   import { Service as Tasks } from "../../../bindings/github.com/Impre-visible/mihari/internal/tasks";
   import type { Todo } from "../../../bindings/github.com/Impre-visible/mihari/internal/gitlab/models";
   import type { Snapshot } from "../../../bindings/github.com/Impre-visible/mihari/internal/tasks/models";
@@ -91,6 +94,43 @@
       remoteStatus = { kind: "ok", message: "Clé supprimée." };
     } catch (err) {
       remoteStatus = { kind: "error", message: errorMessage(err) };
+    }
+  }
+
+  // Test projects on the bot's GitLab account
+
+  let testProjects = $state<TestProject[]>([]);
+  let invite = $state("");
+  let labStatus = $state<Status>({ kind: "idle" });
+  // Reset and delete ask for a second click.
+  let confirming = $state<"reset" | "delete" | null>(null);
+
+  Devlab.List()
+    .then((list) => (testProjects = list ?? []))
+    .catch((err) => (labStatus = { kind: "error", message: errorMessage(err) }));
+
+  async function lab(label: string, run: () => Promise<TestProject[] | null | void>, done: string) {
+    confirming = null;
+    labStatus = { kind: "busy", label };
+    try {
+      testProjects = (await run()) ?? [];
+      labStatus = { kind: "ok", message: done };
+      // The GitLab page and the poll see the projects switched on or gone.
+      loadGitLab();
+      Tasks.PollNow();
+    } catch (err) {
+      labStatus = { kind: "error", message: errorMessage(err) };
+    }
+  }
+
+  // A review request from the bot itself, as the ping form would make it.
+  async function mentionBot(item: TestItem) {
+    labStatus = { kind: "busy", label: "Lecture de la MR…" };
+    try {
+      const todo = await Tasks.Simulate(item.webUrl, "", "");
+      labStatus = { kind: "ok", message: `Tâche ajoutée : ${ref(todo.project, todo.targetType, todo.iid)}. Voir la page Activité.` };
+    } catch (err) {
+      labStatus = { kind: "error", message: errorMessage(err) };
     }
   }
 
@@ -196,8 +236,71 @@
 
 <p class="p-body text-secondary-label">Outils de test, visibles seulement avec wails3 dev.</p>
 
-<form
+<FormGroup
+  title="Projets de test GitLab"
   class="mt-6"
+  footer="Des projets privés sur le compte du bot, préfixés mihari-test- : du code, des MR avec des bugs à trouver et des issues étiquetées mihari::tests pour le profil de nuit. Ils sont allumés dans Mihari dès leur création. Réinitialiser les supprime et les refait à neuf ; seuls les projets mihari-test- du compte du bot sont touchés."
+>
+  <FormRow label="Inviter (facultatif)" for="dev-invite">
+    <TextField id="dev-invite" class="w-64" placeholder="ton pseudo GitLab" bind:value={invite} />
+  </FormRow>
+  {#each testProjects as p (p.id)}
+    <div class="p-form-row flex-col items-stretch! gap-1 py-2.5">
+      <span class="flex items-center gap-2">
+        <span class="p-form-row-label flex-1 font-mono">{p.path}</span>
+        <Button size="small" variant="borderless" iconOnly aria-label="Ouvrir sur GitLab" title="Ouvrir sur GitLab" onclick={() => Browser.OpenURL(p.webUrl)}>
+          <ArrowSquareOutIcon size={14} aria-hidden="true" />
+        </Button>
+      </span>
+      {#each p.mergeRequests ?? [] as mr (mr.iid)}
+        <span class="p-subhead-2 flex items-center gap-2 ps-3">
+          <span class="flex-1 truncate text-secondary-label">!{mr.iid} {mr.title}</span>
+          <Button size="small" variant="borderless" onclick={() => mentionBot(mr)} disabled={labStatus.kind === "busy"}>
+            <AtIcon size={14} aria-hidden="true" />
+            Demander une review
+          </Button>
+        </span>
+      {/each}
+      {#each p.issues ?? [] as is (is.iid)}
+        <span class="p-subhead-2 flex items-center gap-2 ps-3">
+          <span class="flex-1 truncate text-secondary-label">#{is.iid} {is.title}</span>
+          <Button size="small" variant="borderless" onclick={() => Browser.OpenURL(is.webUrl)}>Ouvrir</Button>
+        </span>
+      {/each}
+    </div>
+  {:else}
+    {#if labStatus.kind !== "busy"}
+      <p class="p-body py-3 text-center text-tertiary-label">Aucun projet de test sur le compte du bot.</p>
+    {/if}
+  {/each}
+</FormGroup>
+
+<div class="mt-4 flex items-center gap-2">
+  {@render statusLine(labStatus)}
+  {#if confirming}
+    <Button size="small" onclick={() => (confirming = null)}>Annuler</Button>
+    {#if confirming === "reset"}
+      <Button size="small" variant="destructive" onclick={() => lab("Suppression puis création des projets…", () => Devlab.Reset(invite.trim()), "Projets de test refaits à neuf.")}>
+        Supprimer et refaire
+      </Button>
+    {:else}
+      <Button size="small" variant="destructive" onclick={() => lab("Suppression des projets…", () => Devlab.Delete(), "Projets de test supprimés.")}>
+        Supprimer pour de bon
+      </Button>
+    {/if}
+  {:else}
+    {#if testProjects.length > 0}
+      <Button size="small" variant="borderless" disabled={labStatus.kind === "busy"} onclick={() => (confirming = "delete")}>Supprimer</Button>
+      <Button size="small" disabled={labStatus.kind === "busy"} onclick={() => (confirming = "reset")}>Réinitialiser</Button>
+    {/if}
+    <Button size="small" variant="primary" disabled={labStatus.kind === "busy"} onclick={() => lab("Création des projets…", () => Devlab.Create(invite.trim()), "Projets de test prêts et allumés.")}>
+      {testProjects.length > 0 ? "Compléter" : "Créer les projets de test"}
+    </Button>
+  {/if}
+</div>
+
+<form
+  class="mt-8"
   oninput={() => remoteStatus.kind !== "busy" && (remoteStatus = { kind: "idle" })}
   onsubmit={(e) => {
     e.preventDefault();

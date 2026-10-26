@@ -12,5 +12,7 @@ export {
 
 export type {
     Member,
+    TestItem,
+    TestProject,
     Todo
 } from "./models.js";

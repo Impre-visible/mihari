@@ -1,0 +1,32 @@
+{
+  "description": "Projet de test de Mihari : calcul de factures en Go. Créé et supprimé depuis la page Dev.",
+  "mergeRequests": [
+    {
+      "branch": "remise-paliers",
+      "title": "Remise par paliers",
+      "description": "Applique une remise selon le total HT :\n\n- 5 % à partir de 100 €\n- 10 % à partir de 500 €\n\nLa remise saisie à la main, si elle existe, reste prioritaire."
+    },
+    {
+      "branch": "export-csv",
+      "title": "Export CSV des factures",
+      "description": "Ajoute `Exporter`, qui écrit les lignes d'une facture en CSV pour la compta."
+    },
+    {
+      "branch": "doc-arrondis",
+      "title": "Documente la règle d'arrondi de la TVA",
+      "description": "Pas de changement de comportement : commentaires et README."
+    }
+  ],
+  "issues": [
+    {
+      "title": "Tests pour ParseMontant",
+      "description": "`ParseMontant` n'a aucun test. Couvrir les virgules, les points, les espaces, les montants négatifs et les saisies invalides.",
+      "labels": ["mihari::tests"]
+    },
+    {
+      "title": "Tests des arrondis de TotalTTC",
+      "description": "Vérifier l'arrondi au centime de `TotalTTC` pour les taux de 5,5 %, 10 % et 20 %.",
+      "labels": ["mihari::tests"]
+    }
+  ]
+}

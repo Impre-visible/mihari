@@ -117,7 +117,16 @@ Le binaire est généré dans `bin/`.
 
 ### Tester sans le GitLab de production
 
-Lancer une instance GitLab CE locale avec Docker, puis y créer un projet de test et un compte bot :
+Le plus simple : un compte bot sur gitlab.com, et la section **Projets de test GitLab** de la page Dev.
+
+1. Créer un compte gitlab.com pour le bot et un token d'accès personnel avec le scope `api`, puis connecter Mihari à `https://gitlab.com` avec ce compte.
+2. Dans la page Dev, **Créer les projets de test** : des projets privés `mihari-test-*` sur le compte du bot, avec du code Go et TypeScript, des MR qui contiennent des bugs à trouver (et une qui n'en a pas) et des issues étiquetées `mihari::tests` pour le profil de nuit. Ils sont allumés dans Mihari dès leur création.
+3. **Demander une review** sur une MR crée la tâche qu'un ping créerait. Pour pinguer le bot pour de vrai, renseigner son propre pseudo dans **Inviter** avant la création : il est ajouté aux projets comme développeur.
+4. **Réinitialiser** supprime les projets et les refait à neuf ; **Supprimer** les retire. Seuls les projets `mihari-test-` du compte du bot sont touchés.
+
+Les données de départ sont dans `internal/devlab/_fixtures`, un dossier par projet.
+
+Ou lancer une instance GitLab CE locale avec Docker, puis y créer un projet de test et un compte bot :
 
 ```
 docker run -d --name gitlab -p 8929:80 -v gitlab-data:/var/opt/gitlab gitlab/gitlab-ce:latest
