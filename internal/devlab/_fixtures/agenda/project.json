@@ -1,0 +1,22 @@
+{
+  "description": "Projet de test de Mihari : créneaux d'agenda en TypeScript. Créé et supprimé depuis la page Dev.",
+  "mergeRequests": [
+    {
+      "branch": "pagination",
+      "title": "Pagination des rendez-vous",
+      "description": "Ajoute `page(rdv, numero, taille)` pour afficher les rendez-vous par pages. Les pages sont numérotées à partir de 1."
+    },
+    {
+      "branch": "creneaux-week-end",
+      "title": "Exclure le week-end des créneaux libres",
+      "description": "`libres` ne propose plus de créneau le samedi ni le dimanche."
+    }
+  ],
+  "issues": [
+    {
+      "title": "Tests pour libres()",
+      "description": "Couvrir : journée vide, rendez-vous qui se chevauchent, rendez-vous qui débordent de la plage, durée plus longue que tout trou.",
+      "labels": ["mihari::tests"]
+    }
+  ]
+}

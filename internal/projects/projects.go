@@ -151,3 +151,31 @@ func (s *Service) List() (Overview, error) {
 func (s *Service) Members(projectID int) ([]gitlab.Member, error) {
 	return gitlab.ProjectMembers(context.Background(), projectID)
 }
+
+// Enable switches a project on, keeping the settings it already has.
+func Enable(id int, path string) error {
+	return update(func(list []Settings) []Settings {
+		for i := range list {
+			if list[i].ID == id {
+				list[i].Enabled, list[i].Path = true, path
+				return list
+			}
+		}
+		return append(list, Settings{ID: id, Path: path, Enabled: true, MinRole: gitlab.AccessDeveloper})
+	})
+}
+
+// Forget drops the settings of projects that no longer exist.
+func Forget(ids []int) error {
+	return update(func(list []Settings) []Settings {
+		return slices.DeleteFunc(list, func(s Settings) bool { return slices.Contains(ids, s.ID) })
+	})
+}
+
+func update(change func([]Settings) []Settings) error {
+	config, err := Load()
+	if err != nil {
+		return err
+	}
+	return (&settings.Service{}).Set("projects", change(config.Projects))
+}

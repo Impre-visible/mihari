@@ -20,6 +20,23 @@ export enum TargetType {
     IssueTarget = "Issue",
 };
 
+export interface TestItem {
+    "iid": number;
+    "title": string;
+    "webUrl": string;
+}
+
+/**
+ * TestProject is a test project with its open merge requests and issues.
+ */
+export interface TestProject {
+    "id": number;
+    "path": string;
+    "webUrl": string;
+    "mergeRequests": TestItem[] | null;
+    "issues": TestItem[] | null;
+}
+
 /**
  * Todo is a pending item of the bot's GitLab to-do list, on a merge request or an issue.
  */

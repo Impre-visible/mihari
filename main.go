@@ -10,6 +10,7 @@ import (
 
 	"github.com/Impre-visible/mihari/internal/advisor"
 	"github.com/Impre-visible/mihari/internal/desktop"
+	"github.com/Impre-visible/mihari/internal/devlab"
 	"github.com/Impre-visible/mihari/internal/discord"
 	"github.com/Impre-visible/mihari/internal/engine"
 	"github.com/Impre-visible/mihari/internal/gitlab"
@@ -109,6 +110,7 @@ func main() {
 			application.NewService(desktopService.Service()),
 			application.NewService(&updates.Service{}),
 			application.NewService(discordService.Service()),
+			application.NewService(&devlab.Service{}),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

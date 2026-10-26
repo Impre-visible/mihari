@@ -1,0 +1,3 @@
+module gitlab.com/mihari-test/factures
+
+go 1.22
