@@ -101,6 +101,7 @@ func Start(ctx context.Context, p profiles.Profile) (*Server, error) {
 			"--continuous-batching",
 			"--max-num-seqs", strconv.Itoa(p.MaxJobs),
 		}
+		args = append(args, vllmParserArgs(path, extra)...)
 		s.cmd = exec.Command(info.Path, append(args, extra...)...)
 		s.Model = path
 	case Ollama:
