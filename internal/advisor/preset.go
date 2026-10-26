@@ -79,10 +79,17 @@ var tiers = []tier{
 	{512, "512 Go",
 		Slot{Model: "mlx-community/deepseek-ai-DeepSeek-V4-Flash-8bit", Jobs: 8, ContextPerJob: 65536},
 		Slot{Model: "mlx-community/deepseek-ai-DeepSeek-V4-Flash-8bit", Jobs: 4, ContextPerJob: 131072}},
-	// No DeepSeek V4.1 Flash in 8 bits, and its 4 bits weigh 515 GB.
-	{192, "192 à 256 Go",
-		Slot{Model: "mlx-community/DeepSeek-V4-Flash-8bit", Jobs: 7, ContextPerJob: 65536},
-		Slot{Model: "mlx-community/DeepSeek-V4-Flash-8bit", Jobs: 3, ContextPerJob: 131072}},
+	// Seven reviews at once want few active parameters and a light cache:
+	// Qwen3.8 Flash Next has 6B active and 25 KB of cache per token. It passes
+	// DeepSeek V4 Flash 0731 on DeepSWE and SWE-bench Pro, and mlx-community
+	// has V4 Flash in 4 and 8 bits only for its April preview.
+	{256, "256 Go",
+		Slot{Model: "mlx-community/Qwen3.8-Flash-Next-oQ8e-mtp", Jobs: 7, ContextPerJob: 65536},
+		Slot{Model: "mlx-community/Qwen3.8-Flash-Next-oQ8e-mtp", Jobs: 3, ContextPerJob: 131072}},
+	// The 8 bits weigh 182 GB, more than the 167 GB left here.
+	{192, "192 Go",
+		Slot{Model: "mlx-community/Qwen3.8-Flash-Next-oQ6e-mtp", Jobs: 7, ContextPerJob: 65536},
+		Slot{Model: "mlx-community/Qwen3.8-Flash-Next-oQ6e-mtp", Jobs: 3, ContextPerJob: 131072}},
 	// Qwen3.8 Flash Next 4bit weighs 104 GB, more than the 103 GB left here.
 	{128, "128 Go",
 		Slot{Model: "mlx-community/Qwen3-Coder-Next-8bit", Jobs: 5, ContextPerJob: 65536},
