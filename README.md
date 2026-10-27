@@ -23,6 +23,7 @@ Mihari (見張り, « sentinelle » en japonais) est une application de bureau q
 - Connexion à une instance GitLab : URL, compte bot, token stocké dans le trousseau du système
 - Détection des merge requests à relire par interrogation de l'API GitLab, sans webhook
 - Review automatique des merge requests et publication des commentaires
+- Mode pédagogique par projet, pour une équipe en apprentissage : chaque remarque explique le problème, le pourquoi, la correction et ce qu'il faut retenir
 - Écran d'état : modèle chargé, jobs en cours et en attente
 
 ### Prévu

@@ -44,7 +44,7 @@ func (s *Service) run(ctx context.Context, j *job, active scheduler.Active) {
 		outcome, err = agent.Run(ctx, agent.Config{
 			URL: active.URL, Model: active.Model, MaxTurns: p.TurnLimit(),
 			Timeout: p.TimeLimit(), ContextTokens: p.ContextPerJob,
-			Critic: true, KeepReasoning: keepsReasoning(p.Engine),
+			Critic: true, CriticRules: j.criticRules, KeepReasoning: keepsReasoning(p.Engine),
 		}, env, j.systemPrompt, j.taskPrompt, inbox, func(e agent.Event) { s.record(j, e) })
 		stopWatch()
 		s.mu.Lock()
@@ -226,7 +226,11 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 	env.PastJobs = pastJobs(j.ProjectID, j.ID)
 	env.Vision = active.Profile.Vision
 	env.ReviewedSHA = j.reviewedSHA
-	j.systemPrompt = systemPrompt(active.Profile.Prompt, config.Project(j.ProjectID).Instructions, repo, projects.Memory(j.ProjectID))
+	project := config.Project(j.ProjectID)
+	j.systemPrompt = systemPrompt(active.Profile.Prompt, project.Instructions, project.Teaching, repo, projects.Memory(j.ProjectID))
+	if project.Teaching {
+		j.criticRules = teachingCritic
+	}
 	j.taskPrompt = taskPrompt(j, env)
 	return env, cleanup, nil
 }

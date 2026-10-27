@@ -33,6 +33,8 @@ type Settings struct {
 	Image string `json:"image"`
 	// Added to the profile's prompt for jobs on this project.
 	Instructions string `json:"instructions"`
+	// The team learns: every review, suggestion and answer explains why.
+	Teaching bool `json:"teaching"`
 }
 
 type Config struct {

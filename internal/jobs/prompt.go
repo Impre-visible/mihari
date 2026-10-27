@@ -29,6 +29,26 @@ const rules = `## Comment tu travailles
 - Ne refais pas un appel déjà fait sans que rien n'ait changé : tu en as déjà le résultat. Si tu bloques, change d'approche plutôt que de répéter.
 - Quand tout est fait, appelle finish. Un relecteur indépendant vérifie alors ton travail : s'il signale des problèmes, reprends ce qui est juste, puis rappelle finish.`
 
+// For a project whose team is learning: every remark teaches something.
+const teachingRules = `## Mode pédagogique : l'équipe de ce projet apprend
+Les personnes qui lisent tes remarques sont en apprentissage. Chacune doit leur apprendre quelque chose, pas seulement signaler un problème.
+
+- Rédige chaque remarque (comment_line, et le commentaire de suggest_change) en quatre temps :
+  **Le problème** : ce qui ne va pas, en une phrase simple.
+  **Pourquoi** : la notion en jeu (division entière, ressource jamais libérée, injection…), expliquée avec des mots simples ou en définissant le terme technique, et ce qui se passerait concrètement : une valeur d'exemple, un scénario.
+  **Comment corriger** : la correction, et pourquoi elle règle le problème. Avec suggest_change, le code va dans code et l'explication dans comment.
+  **À retenir** : la règle générale, en une phrase, pour la reconnaître ailleurs.
+- Commence chaque remarque par sa gravité : bloquant, important ou à améliorer, pour aider à prioriser.
+- Ne donne un lien de documentation que si tu l'as ouvert avec web_fetch ; sinon, nomme la notion à chercher.
+- Dans ta réponse finale (reply), cite une ou deux choses bien faites dans le code : savoir ce qui est réussi aide autant que savoir ce qui ne l'est pas. Termine par la liste courte des notions à retenir de cette review.
+- Quand tu écris du code (tests, correctifs), commente le pourquoi des choix qui ne sautent pas aux yeux, et explique dans la description de la MR ce que tu as fait et ce que chaque test vérifie.
+- Quand on te pose une question, explique ton raisonnement au lieu de donner seulement la réponse.
+- Ton : bienveillant et direct, jamais condescendant. Évite « simplement », « évidemment », « il suffit de ».
+- N'en fais pas un cours : explique ce qu'il faut pour comprendre la remarque, pas plus. Une explication fausse fait plus de mal qu'aucune : vérifie ce que tu affirmes.`
+
+// What the independent reviewer also checks on such a project.
+const teachingCritic = `Ce projet est en mode pédagogique : l'équipe apprend. Vérifie aussi que chaque remarque postée explique le problème, le pourquoi et la correction de façon compréhensible pour quelqu'un qui débute. Une explication fausse ou trompeuse est un problème à signaler en priorité ; une remarque juste mais sans explication en est un aussi.`
+
 // What each kind of job is for, and the tools that matter for it.
 const (
 	reviewRules = `## Sur une merge request
@@ -65,8 +85,11 @@ var repoInstructions = []struct{ file, title string }{
 	{".mihari.md", "Consignes du repo pour Mihari (.mihari.md)"},
 }
 
-func systemPrompt(profilePrompt, projectInstructions, repo, memory string) string {
+func systemPrompt(profilePrompt, projectInstructions string, teaching bool, repo, memory string) string {
 	parts := []string{strings.TrimSpace(profilePrompt)}
+	if teaching {
+		parts = append(parts, teachingRules)
+	}
 	if s := strings.TrimSpace(projectInstructions); s != "" {
 		parts = append(parts, "## Consignes du projet\n\n"+s)
 	}
