@@ -29,7 +29,11 @@ func critique(ctx context.Context, cfg Config, env *Env, task, summary string, a
 	verdict := func(text string) {
 		emit(Event{At: time.Now(), Kind: "result", Title: "critic", Text: text})
 	}
-	out, err := Run(ctx, subConfig(cfg), readOnly(env), criticSystem, brief, nil, func(e Event) {
+	system := criticSystem
+	if rules := strings.TrimSpace(cfg.CriticRules); rules != "" {
+		system += "\n\n" + rules
+	}
+	out, err := Run(ctx, subConfig(cfg), readOnly(env), system, brief, nil, func(e Event) {
 		e.Agent = "critic"
 		emit(e)
 	})

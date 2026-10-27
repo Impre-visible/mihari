@@ -42,6 +42,11 @@ export interface Settings {
      * Added to the profile's prompt for jobs on this project.
      */
     "instructions": string;
+
+    /**
+     * The team learns: every review, suggestion and answer explains why.
+     */
+    "teaching": boolean;
 }
 
 /**

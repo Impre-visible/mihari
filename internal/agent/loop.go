@@ -21,6 +21,8 @@ type Config struct {
 	// An independent reviewer checks the work the first time the model calls
 	// finish with success, and the model hears what it found before ending.
 	Critic bool
+	// What the reviewer also checks on this job, added to its prompt.
+	CriticRules string
 	// Hands the model its own earlier thinking back on each turn, as agentic
 	// models such as Qwen3.8 and Nanbeige expect. Remote APIs that refuse it
 	// in a request leave it off.

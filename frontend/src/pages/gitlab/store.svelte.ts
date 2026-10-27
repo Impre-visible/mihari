@@ -26,7 +26,8 @@ function customized(s: ProjectSettings) {
     extras(s).length > 0 ||
     blocked(s).length > 0 ||
     s.image.trim() !== "" ||
-    s.instructions.trim() !== ""
+    s.instructions.trim() !== "" ||
+    s.teaching
   );
 }
 

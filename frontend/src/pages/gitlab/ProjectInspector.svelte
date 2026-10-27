@@ -129,6 +129,15 @@
     </FormRow>
   </FormGroup>
 
+  <FormGroup title="Équipe" class="mt-3">
+    <FormRow label="Mode pédagogique" for="pr-teaching">
+      <Switch id="pr-teaching" label="Mode pédagogique" bind:checked={s.teaching} />
+    </FormRow>
+  </FormGroup>
+  <p class="p-subhead-2 mb-3 ms-3 text-tertiary-label">
+    Pour une équipe en apprentissage : chaque remarque explique le problème, le pourquoi, la correction et ce qu'il faut retenir, et le relecteur vérifie les explications.
+  </p>
+
   <FormGroup title="Consignes pour l'agent" class="mt-3">
     <div class="p-form-row flex-col items-stretch! py-2.5">
       <TextArea rows={4} class="w-full resize-y" placeholder="Les tests vont dans tests/ et utilisent pytest. Lance make check avant de finir." bind:value={s.instructions} />
