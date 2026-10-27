@@ -41,6 +41,7 @@ func init() {
 			if err != nil {
 				return "", fmt.Errorf("la ligne %d de %s n'est pas modifiable par une suggestion (elle doit être dans le diff) : %w", line, a.Path, err)
 			}
+			post.Thread = thread
 			env.Sent(post)
 			return fmt.Sprintf("Suggestion postée sur %s:%d (fil %s, pour reply_to_thread).", a.Path, line, thread), nil
 		}, agent.When(reviewing), agent.Writes()))

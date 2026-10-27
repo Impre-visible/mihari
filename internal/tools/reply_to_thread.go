@@ -19,7 +19,7 @@ func init() {
 			if strings.TrimSpace(a.Body) == "" || strings.TrimSpace(a.ThreadID) == "" {
 				return "", errors.New("thread_id et body sont obligatoires")
 			}
-			post := agent.Post{Kind: "reply", Path: a.ThreadID, Body: a.Body}
+			post := agent.Post{Kind: "reply", Thread: a.ThreadID, Body: a.Body}
 			if err := env.Again(post); err != nil {
 				return "", err
 			}

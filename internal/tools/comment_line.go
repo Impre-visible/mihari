@@ -42,6 +42,7 @@ func init() {
 				env.Sent(post)
 				return fmt.Sprintf("La ligne %d de %s n'est pas dans le diff : posté en commentaire normal.", a.Line, a.Path), nil
 			}
+			post.Thread = thread
 			env.Sent(post)
 			return fmt.Sprintf("Commentaire posté sur %s:%d (fil %s, pour reply_to_thread).", a.Path, a.Line, thread), nil
 		}, agent.When(reviewing), agent.Writes()))

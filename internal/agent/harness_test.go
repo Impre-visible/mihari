@@ -198,18 +198,35 @@ func TestFitContextOrder(t *testing.T) {
 	}
 }
 
-func TestAgainRefusesSamePost(t *testing.T) {
+func TestAgainRefusesRepeats(t *testing.T) {
 	env := &Env{}
-	first := Post{Kind: "comment", Path: "a.go", Line: 3, Body: "Division entière : la remise vaut 0."}
-	if env.Again(first) != nil {
-		t.Fatal("nothing posted yet")
+	env.Sent(Post{Kind: "comment", Path: "facture.go", Line: 52, Body: "Division entière : la remise vaut toujours 0.", Thread: "abc"})
+	for _, c := range []struct {
+		name string
+		post Post
+		want string
+	}{
+		{"reworded, a line further", Post{Kind: "comment", Path: "facture.go", Line: 53,
+			Body: "La remise est toujours nulle à cause de la division entière."}, "déjà fait cette remarque"},
+		{"as a suggestion", Post{Kind: "suggestion", Path: "facture.go", Line: 52,
+			Body: "Division entière, la remise vaut toujours 0 :\n```suggestion:-0+0\nreturn total - total*f.Remise()/100\n```"}, "déjà fait cette remarque"},
+		{"another problem, same line", Post{Kind: "comment", Path: "facture.go", Line: 52, Body: "Le palier devrait être >= et pas >."},
+			"reply_to_thread"},
+		{"another problem, next line", Post{Kind: "comment", Path: "facture.go", Line: 54, Body: "Le palier devrait être >= et pas >."}, ""},
+		{"same words, other file", Post{Kind: "comment", Path: "export.go", Line: 52, Body: "Division entière : la remise vaut toujours 0."}, ""},
+		{"same words, far below", Post{Kind: "comment", Path: "facture.go", Line: 90, Body: "Division entière : la remise vaut toujours 0."}, ""},
+	} {
+		err := env.Again(c.post)
+		if c.want == "" && err != nil || c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)) {
+			t.Errorf("%s: %v", c.name, err)
+		}
 	}
-	env.Sent(first)
-	same := Post{Kind: "comment", Path: "a.go", Line: 3, Body: "division entière :   la remise vaut 0."}
-	if err := env.Again(same); err == nil || !strings.Contains(err.Error(), "a.go:3") {
-		t.Errorf("same text at the same place, case and spacing aside: %v", err)
+
+	env.Sent(Post{Kind: "reply", Thread: "abc", Body: "Corrigé dans le dernier commit, merci."})
+	if env.Again(Post{Kind: "reply", Thread: "abc", Body: "Merci, c'est corrigé dans le dernier commit !"}) == nil {
+		t.Error("the same reply in the same thread")
 	}
-	if env.Again(Post{Kind: "comment", Path: "a.go", Line: 9, Body: first.Body}) != nil {
-		t.Error("the same remark elsewhere is another comment")
+	if env.Again(Post{Kind: "reply", Thread: "def", Body: "Corrigé dans le dernier commit, merci."}) != nil {
+		t.Error("another thread is another reply")
 	}
 }

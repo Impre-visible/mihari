@@ -75,6 +75,7 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 		if env.MR, err = client.MergeRequest(ctx, target.IID); err != nil {
 			return nil, cleanup, err
 		}
+		knownRemarks(ctx, client, target, env)
 	case gitlab.IssueTarget:
 		issue, err := client.Issue(ctx, target.IID)
 		if err != nil {
@@ -493,4 +494,21 @@ func stateLabel(s State) string {
 // remote APIs may refuse it.
 func keepsReasoning(kind string) bool {
 	return kind != string(engine.OpenCode)
+}
+
+// knownRemarks tells env the line comments the bot already left on the merge
+// request, so a new review does not make them again. Its general replies are
+// left out: a new summary may well resemble the last one.
+func knownRemarks(ctx context.Context, client *gitlab.Client, target gitlab.Target, env *agent.Env) {
+	discussions, err := client.Discussions(ctx, target)
+	if err != nil {
+		return
+	}
+	for _, d := range discussions {
+		for _, n := range d.Notes {
+			if n.Line > 0 && strings.EqualFold(n.Author, client.Bot) {
+				env.Sent(agent.Post{Kind: "comment", Path: n.Path, Line: n.Line, Body: n.Body, Thread: d.ID})
+			}
+		}
+	}
 }
