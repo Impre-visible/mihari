@@ -237,7 +237,7 @@ func ggufRepos(ctx context.Context, name string) []string {
 	return ids
 }
 
-var errNotDownloaded = errors.New("modèle pas encore téléchargé : clique sur Télécharger dans Profils")
+var errNotDownloaded = errors.New("modèle pas encore téléchargé : télécharge-le depuis son profil, dans la page Agent")
 
 // downloadHF fetches either the GGUF weights (onlyGGUF) or the whole repository.
 func downloadHF(ctx context.Context, model string, onlyGGUF bool, progress func(done, total int64)) error {

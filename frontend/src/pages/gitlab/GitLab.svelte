@@ -40,7 +40,7 @@
   });
 </script>
 
-<SplitView width={300}>
+<SplitView id="gitlab" width={300}>
   {#snippet list()}
     <ListRow title="Connexion" subtitle={connection.text} alert={connection.alert} selected={showConnection} onclick={() => (selected = "connection")}>
       {#snippet leading()}
