@@ -102,7 +102,9 @@ type job struct {
 	// Built once the repository is cloned, since .mihari.md comes from it.
 	systemPrompt string
 	taskPrompt   string
-	// What the independent reviewer also checks, from the project's settings.
+	// The project's team is learning, and what the independent reviewer
+	// then also checks.
+	teaching    bool
 	criticRules string
 	// The 👀 award, removed when the job ends, and the comment it is on (0
 	// for the merge request or issue itself).

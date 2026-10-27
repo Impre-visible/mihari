@@ -46,6 +46,21 @@ Les personnes qui lisent tes remarques sont en apprentissage. Chacune doit leur 
 - Ton : bienveillant et direct, jamais condescendant. Évite « simplement », « évidemment », « il suffit de ».
 - N'en fais pas un cours : explique ce qu'il faut pour comprendre la remarque, pas plus. Une explication fausse fait plus de mal qu'aucune : vérifie ce que tu affirmes.`
 
+// Repeated at the end of the task, the last thing the model reads before it
+// starts: small models follow it far better than rules higher up.
+const teachingReminder = `## Mode pédagogique : l'équipe apprend
+Chaque remarque doit apprendre quelque chose, pas seulement signaler. Écris chaque comment_line, et le comment de chaque suggest_change, exactement sur ce modèle :
+
+**[bloquant | important | à améliorer] Le problème** : ce qui ne va pas, en une phrase simple.
+**Pourquoi** : la notion en jeu, expliquée simplement, et un exemple concret de ce qui casse (une valeur, un scénario).
+**Comment corriger** : la correction, et pourquoi elle règle le problème.
+**À retenir** : la règle générale, en une phrase.
+
+Dans ta réponse finale, cite une ou deux choses bien faites, puis les notions à retenir.`
+
+const teachingReminderCode = `## Mode pédagogique : l'équipe apprend
+Commente le pourquoi des choix qui ne sautent pas aux yeux dans le code que tu écris. Dans la description de la merge request, explique ce que tu as fait, pourquoi, et ce que vérifie chaque test, pour quelqu'un qui débute.`
+
 // What the independent reviewer also checks on such a project.
 const teachingCritic = `Ce projet est en mode pédagogique : l'équipe apprend. Vérifie aussi que chaque remarque postée explique le problème, le pourquoi et la correction de façon compréhensible pour quelqu'un qui débute. Une explication fausse ou trompeuse est un problème à signaler en priorité ; une remarque juste mais sans explication en est un aussi.`
 
@@ -126,6 +141,13 @@ func taskPrompt(j *job, env *agent.Env) string {
 		if mr.FromFork() {
 			b.WriteString("\nLa branche est dans un fork : tu peux lire et commenter, pas pousser.\n")
 		}
+	}
+	if j.teaching {
+		reminder := teachingReminder
+		if j.Kind == agent.KindIssues {
+			reminder = teachingReminderCode
+		}
+		b.WriteString("\n" + reminder + "\n")
 	}
 	return b.String()
 }

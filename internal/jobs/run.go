@@ -229,7 +229,7 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 	project := config.Project(j.ProjectID)
 	j.systemPrompt = systemPrompt(active.Profile.Prompt, project.Instructions, project.Teaching, repo, projects.Memory(j.ProjectID))
 	if project.Teaching {
-		j.criticRules = teachingCritic
+		j.teaching, j.criticRules = true, teachingCritic
 	}
 	j.taskPrompt = taskPrompt(j, env)
 	return env, cleanup, nil
