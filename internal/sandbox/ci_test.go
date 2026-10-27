@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Impre-visible/mihari/internal/projects"
 )
 
 func TestCIImage(t *testing.T) {
@@ -44,5 +46,26 @@ deploy: {image: alpine, script: [./deploy.sh]}
 	}
 	if image, _ := CIImage(t.TempDir()); image != "" {
 		t.Error("no CI file should give no image")
+	}
+}
+
+func TestLanguageImage(t *testing.T) {
+	repo := t.TempDir()
+	c := projects.Config{DefaultImage: projects.DefaultImage}
+	if image, source := PickImage(c, 1, repo); image != projects.DefaultImage || source != "image par défaut" {
+		t.Errorf("no language: %s (%s)", image, source)
+	}
+	_ = os.WriteFile(filepath.Join(repo, "go.mod"), []byte("module x\n"), 0o644)
+	if image, source := PickImage(c, 1, repo); image != "golang:1" || source != "projet Go" {
+		t.Errorf("Go project: %s (%s)", image, source)
+	}
+	// A default the user chose stays theirs.
+	if image, _ := PickImage(projects.Config{DefaultImage: "alpine"}, 1, repo); image != "alpine" {
+		t.Errorf("chosen default: %s", image)
+	}
+	// The CI's test image comes first.
+	_ = os.WriteFile(filepath.Join(repo, ".gitlab-ci.yml"), []byte("test:\n  image: golang:1.22\n  script: [go test ./...]\n"), 0o644)
+	if image, _ := PickImage(c, 1, repo); image != "golang:1.22" {
+		t.Errorf("CI image: %s", image)
 	}
 }

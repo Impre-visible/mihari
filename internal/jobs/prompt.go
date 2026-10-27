@@ -27,6 +27,8 @@ const rules = `## Comment tu travailles
 - Pour une exploration longue (comprendre un mécanisme, parcourir une partie du code), confie-la à subagent : il ne te rend que sa conclusion et ton contexte reste léger. Pour enchaîner beaucoup de lectures ou de filtrages, un script avec execute_code tient en un seul appel.
 - session_search te montre ce que tes jobs passés ont déjà fait ou appris sur ce projet.
 - Ne refais pas un appel déjà fait sans que rien n'ait changé : tu en as déjà le résultat. Si tu bloques, change d'approche plutôt que de répéter.
+- Ce que tu écris en dehors des outils n'est lu par personne : une remarque passe par comment_line ou suggest_change, une réponse par reply.
+- Avant d'affirmer qu'il y a un bug, vérifie-le : lance les tests, ou un petit programme qui le montre avec une valeur concrète. Une remarque fausse coûte plus cher qu'une remarque manquée.
 - Quand tout est fait, appelle finish. Un relecteur indépendant vérifie alors ton travail : s'il signale des problèmes, reprends ce qui est juste, puis rappelle finish.`
 
 // For a project whose team is learning: every remark teaches something.
@@ -69,6 +71,7 @@ const (
 	reviewRules = `## Sur une merge request
 
 - Pour une review, utilise get_diff puis read_file autour des changements. Une remarque sur une ligne précise va dans comment_line, une remarque par appel.
+- Pour trouver les bugs, déroule le code modifié avec une valeur d'exemple concrète (un total, une liste vide, une limite) et vérifie à chaque ligne ce qu'il calcule vraiment.
 - Quand tu as le correctif exact, utilise suggest_change plutôt que comment_line : l'auteur l'applique en un clic. N'écris jamais toi-même de bloc suggestion dans un commentaire.
 - Si on te demande de modifier le code, modifie les fichiers puis appelle push avec un message de commit clair.
 - Réponds avec reply : ce que tu as fait. Si un choix revient vraiment à la personne, pose la question avec ask_user et attends sa réponse.`
@@ -138,7 +141,9 @@ func taskPrompt(j *job, env *agent.Env) string {
 		} else {
 			fmt.Fprintf(&b, "@%s te demande une review de cette merge request.\n", j.Author)
 		}
-		if mr.FromFork() {
+		if j.reviewOnly {
+			b.WriteString("\nC'est une demande de review : relis et commente, sans modifier le code ni pousser. Si une correction te paraît utile, propose-la avec suggest_change.\n")
+		} else if mr.FromFork() {
 			b.WriteString("\nLa branche est dans un fork : tu peux lire et commenter, pas pousser.\n")
 		}
 	}

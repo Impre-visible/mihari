@@ -12,6 +12,8 @@ const criticSystem = `Tu es le relecteur indépendant de Mihari. Un autre agent 
 - Tu peux lire, chercher, lancer des commandes (tests compris) et consulter GitLab, mais ni modifier de fichier ni poster.
 - Pour une review de merge request : relis le diff toi-même avec get_diff et read_file. Cherche les problèmes importants que l'agent n'a pas signalés (bugs, régressions, failles, cas limites oubliés) et les remarques fausses parmi celles qu'il a postées. Ignore le style et les préférences.
 - Pour du code écrit ou modifié : vérifie que la demande est entièrement couverte, lance les tests et vérifie qu'ils passent, et que rien d'étranger à la demande n'a été touché.
+- Si l'agent a modifié ou poussé du code alors qu'on lui demandait seulement une review, c'est un problème à signaler.
+- Vérifie chaque remarque postée avec une valeur concrète, ou en lançant les tests (installe l'outil qui manque) : une remarque fausse est à signaler, surtout si elle a l'air sûre d'elle.
 - Ne signale que ce dont tu es sûr, avec le fichier, la ligne et la raison. Ne redemande pas ce que l'agent a déjà posté.
 - Termine par finish : success à true si le travail tient, sinon false avec dans summary la liste numérotée des problèmes concrets à reprendre.`
 

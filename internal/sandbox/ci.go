@@ -89,7 +89,7 @@ func CIImage(repo string) (image, job string) {
 
 // PickImage chooses the container image of a job on the project cloned at
 // repo, and says where it comes from: the project's own setting, else its CI
-// test job's, else the default image.
+// test job's, else its language's, else the default image.
 func PickImage(c projects.Config, projectID int, repo string) (image, source string) {
 	if image := strings.TrimSpace(c.Project(projectID).Image); image != "" {
 		return image, "réglage du projet"
@@ -97,7 +97,41 @@ func PickImage(c projects.Config, projectID int, repo string) (image, source str
 	if image, job := CIImage(repo); image != "" {
 		return image, "job CI « " + job + " »"
 	}
+	// A default chosen in the settings is the user's call; the built-in one
+	// has no language at all, so the project's own goes first.
+	if c.DefaultImage == projects.DefaultImage {
+		if image, language := LanguageImage(repo); image != "" {
+			return image, "projet " + language
+		}
+	}
 	return c.DefaultImage, "image par défaut"
+}
+
+// Official images by a file at the project's root, in order: each has its
+// language's tools, and git, which the default image lacks, so the agent can
+// run the tests to check what it claims.
+var languages = []struct{ files, image, name string }{
+	{"go.mod", "golang:1", "Go"},
+	{"Cargo.toml", "rust:1", "Rust"},
+	{"package.json", "node:lts", "Node.js"},
+	{"pyproject.toml requirements.txt setup.py", "python:3", "Python"},
+	{"pom.xml", "maven:3-eclipse-temurin-21", "Java (Maven)"},
+	{"build.gradle build.gradle.kts", "gradle:jdk21", "Java (Gradle)"},
+	{"Gemfile", "ruby:3", "Ruby"},
+	{"composer.json", "php:8-cli", "PHP"},
+}
+
+// LanguageImage returns the image for the language of the project cloned at
+// repo, "" when none is recognized.
+func LanguageImage(repo string) (image, language string) {
+	for _, l := range languages {
+		for _, f := range strings.Fields(l.files) {
+			if _, err := os.Stat(filepath.Join(repo, f)); err == nil {
+				return l.image, l.name
+			}
+		}
+	}
+	return "", ""
 }
 
 // imageOf reads an image given as "node:22" or as {name: node:22}.

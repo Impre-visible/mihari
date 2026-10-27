@@ -106,6 +106,8 @@ type job struct {
 	// then also checks.
 	teaching    bool
 	criticRules string
+	// A review request: the job comments and never pushes.
+	reviewOnly bool
 	// The 👀 award, removed when the job ends, and the comment it is on (0
 	// for the merge request or issue itself).
 	awardID   int
