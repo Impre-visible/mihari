@@ -27,6 +27,8 @@ const rules = `## Comment tu travailles
 - Pour une exploration longue (comprendre un mécanisme, parcourir une partie du code), confie-la à subagent : il ne te rend que sa conclusion et ton contexte reste léger. Pour enchaîner beaucoup de lectures ou de filtrages, un script avec execute_code tient en un seul appel.
 - session_search te montre ce que tes jobs passés ont déjà fait ou appris sur ce projet.
 - Ne refais pas un appel déjà fait sans que rien n'ait changé : tu en as déjà le résultat. Si tu bloques, change d'approche plutôt que de répéter.
+- Ce que tu écris en dehors des outils n'est lu par personne : une remarque passe par comment_line ou suggest_change, une réponse par reply.
+- Avant d'affirmer qu'il y a un bug, vérifie-le : lance les tests, ou un petit programme qui le montre avec une valeur concrète. Une remarque fausse coûte plus cher qu'une remarque manquée.
 - Quand tout est fait, appelle finish. Un relecteur indépendant vérifie alors ton travail : s'il signale des problèmes, reprends ce qui est juste, puis rappelle finish.`
 
 // For a project whose team is learning: every remark teaches something.
@@ -46,6 +48,21 @@ Les personnes qui lisent tes remarques sont en apprentissage. Chacune doit leur 
 - Ton : bienveillant et direct, jamais condescendant. Évite « simplement », « évidemment », « il suffit de ».
 - N'en fais pas un cours : explique ce qu'il faut pour comprendre la remarque, pas plus. Une explication fausse fait plus de mal qu'aucune : vérifie ce que tu affirmes.`
 
+// Repeated at the end of the task, the last thing the model reads before it
+// starts: small models follow it far better than rules higher up.
+const teachingReminder = `## Mode pédagogique : l'équipe apprend
+Chaque remarque doit apprendre quelque chose, pas seulement signaler. Écris chaque comment_line, et le comment de chaque suggest_change, exactement sur ce modèle :
+
+**[bloquant | important | à améliorer] Le problème** : ce qui ne va pas, en une phrase simple.
+**Pourquoi** : la notion en jeu, expliquée simplement, et un exemple concret de ce qui casse (une valeur, un scénario).
+**Comment corriger** : la correction, et pourquoi elle règle le problème.
+**À retenir** : la règle générale, en une phrase.
+
+Dans ta réponse finale, cite une ou deux choses bien faites, puis les notions à retenir.`
+
+const teachingReminderCode = `## Mode pédagogique : l'équipe apprend
+Commente le pourquoi des choix qui ne sautent pas aux yeux dans le code que tu écris. Dans la description de la merge request, explique ce que tu as fait, pourquoi, et ce que vérifie chaque test, pour quelqu'un qui débute.`
+
 // What the independent reviewer also checks on such a project.
 const teachingCritic = `Ce projet est en mode pédagogique : l'équipe apprend. Vérifie aussi que chaque remarque postée explique le problème, le pourquoi et la correction de façon compréhensible pour quelqu'un qui débute. Une explication fausse ou trompeuse est un problème à signaler en priorité ; une remarque juste mais sans explication en est un aussi.`
 
@@ -54,6 +71,7 @@ const (
 	reviewRules = `## Sur une merge request
 
 - Pour une review, utilise get_diff puis read_file autour des changements. Une remarque sur une ligne précise va dans comment_line, une remarque par appel.
+- Pour trouver les bugs, déroule le code modifié avec une valeur d'exemple concrète (un total, une liste vide, une limite) et vérifie à chaque ligne ce qu'il calcule vraiment.
 - Quand tu as le correctif exact, utilise suggest_change plutôt que comment_line : l'auteur l'applique en un clic. N'écris jamais toi-même de bloc suggestion dans un commentaire.
 - Si on te demande de modifier le code, modifie les fichiers puis appelle push avec un message de commit clair.
 - Réponds avec reply : ce que tu as fait. Si un choix revient vraiment à la personne, pose la question avec ask_user et attends sa réponse.`
@@ -123,9 +141,18 @@ func taskPrompt(j *job, env *agent.Env) string {
 		} else {
 			fmt.Fprintf(&b, "@%s te demande une review de cette merge request.\n", j.Author)
 		}
-		if mr.FromFork() {
+		if j.reviewOnly {
+			b.WriteString("\nC'est une demande de review : relis et commente, sans modifier le code ni pousser. Si une correction te paraît utile, propose-la avec suggest_change.\n")
+		} else if mr.FromFork() {
 			b.WriteString("\nLa branche est dans un fork : tu peux lire et commenter, pas pousser.\n")
 		}
+	}
+	if j.teaching {
+		reminder := teachingReminder
+		if j.Kind == agent.KindIssues {
+			reminder = teachingReminderCode
+		}
+		b.WriteString("\n" + reminder + "\n")
 	}
 	return b.String()
 }

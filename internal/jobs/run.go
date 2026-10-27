@@ -179,7 +179,9 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 			"Docker Desktop ne voit que les dossiers partagés dans ses réglages (Resources › File sharing)", repo)
 	}
 
-	if branch != "" && !j.dry {
+	// A review request reads and comments: no pushing, whatever the model makes of it.
+	j.reviewOnly = reviewOnly(j)
+	if branch != "" && !j.dry && !j.reviewOnly {
 		pushed := false
 		env.Push = func(ctx context.Context, message string) (string, error) {
 			sha, err := s.push(ctx, client, container, repo, branch, message, j.Author)
@@ -229,7 +231,7 @@ func (s *Service) prepare(ctx context.Context, j *job, active scheduler.Active) 
 	project := config.Project(j.ProjectID)
 	j.systemPrompt = systemPrompt(active.Profile.Prompt, project.Instructions, project.Teaching, repo, projects.Memory(j.ProjectID))
 	if project.Teaching {
-		j.criticRules = teachingCritic
+		j.teaching, j.criticRules = true, teachingCritic
 	}
 	j.taskPrompt = taskPrompt(j, env)
 	return env, cleanup, nil
