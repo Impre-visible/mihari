@@ -53,7 +53,7 @@
   }
 </script>
 
-<SplitView width={300}>
+<SplitView id="agent" width={300}>
   {#snippet header()}
     <WeekStrip selected={showMachine ? null : current?.id} onpick={(id) => (selected = id)} />
     <div class="mt-2 flex items-center gap-2">

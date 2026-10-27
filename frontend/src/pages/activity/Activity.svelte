@@ -55,7 +55,7 @@
   </ListRow>
 {/snippet}
 
-<SplitView width={320} bind:detail>
+<SplitView id="activity" width={320} bind:detail>
   {#snippet header()}<Health />{/snippet}
   {#snippet list()}
     <ListHeading title="En cours" />

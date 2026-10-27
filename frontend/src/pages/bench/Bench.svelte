@@ -89,7 +89,7 @@
   <span>{RUN_STATES[r.state] ?? r.state}</span>
 {/snippet}
 
-<SplitView width={300}>
+<SplitView id="bench" width={300}>
   {#snippet list()}
     <ListRow title="Nouveau banc" subtitle="Comparer des profils sur une MR" selected={open === null} onclick={() => (open = null)}>
       {#snippet leading()}<PlusIcon size={16} class="text-secondary-label" aria-hidden="true" />{/snippet}

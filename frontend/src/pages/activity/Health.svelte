@@ -41,14 +41,15 @@
 
 <ul class="flex flex-col gap-1.5">
   {#each items as item, i (i)}
-    <li class="flex min-w-0 items-center gap-2" title={item.detail}>
+    <li class={["flex min-w-0 gap-2", item.tone === "bad" ? "items-start" : "items-center"]} title={item.detail}>
       {#if item.tone === "wait"}
         <Spinner small label={item.detail} />
       {:else}
-        <span class={["ms-0.5 me-0.5 size-2 shrink-0 rounded-full", DOT[item.tone]]} aria-hidden="true"></span>
+        <span class={["ms-0.5 me-0.5 size-2 shrink-0 rounded-full", item.tone === "bad" && "mt-1.5", DOT[item.tone]]} aria-hidden="true"></span>
       {/if}
       <span class="p-subhead-2 shrink-0 font-semibold">{item.title}</span>
-      <span class={["p-subhead-2 min-w-0 flex-1 truncate", item.tone === "bad" ? "text-(--p-sys-red)" : "text-secondary-label"]}>{item.detail}</span>
+      <!-- An error is read in full: it says what to fix. -->
+      <span class={["p-subhead-2 min-w-0 flex-1", item.tone === "bad" ? "break-words text-(--p-sys-red) select-text" : "truncate text-secondary-label"]}>{item.detail}</span>
       {#if item.action}
         <Button size="small" variant="borderless" onclick={item.action.run}>{item.action.label}</Button>
       {/if}
