@@ -271,6 +271,7 @@ func (s *Service) benchProfile(ctx context.Context, i int, todo gitlab.Todo, p p
 	outcome, err := agent.Run(ctx, agent.Config{
 		URL: server.URL, Model: server.Model, MaxTurns: p.TurnLimit(),
 		Timeout: p.TimeLimit(), ContextTokens: p.ContextPerJob,
+		Critic: true, KeepReasoning: keepsReasoning(p.Engine),
 	}, env, j.systemPrompt, j.taskPrompt, nil, func(e agent.Event) {
 		j.events = append(j.events, e)
 	})

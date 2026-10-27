@@ -20,7 +20,12 @@ func init() {
 			if err != nil {
 				return "", err
 			}
-			if env.Keep(agent.Post{Kind: "comment", Path: a.Path, Line: a.Line, Body: a.Body}) {
+			post := agent.Post{Kind: "comment", Path: a.Path, Line: a.Line, Body: a.Body}
+			if err := env.Again(post); err != nil {
+				return "", err
+			}
+			if env.Keep(post) {
+				env.Sent(post)
 				return fmt.Sprintf("Commentaire posté sur %s:%d.", a.Path, a.Line), nil
 			}
 			thread, err := env.GitLab.CommentLine(ctx, env.MR, oldPath, newPath, a.Line, 0, a.Body)
@@ -34,8 +39,11 @@ func init() {
 				if _, err := env.GitLab.Comment(ctx, env.Target, body); err != nil {
 					return "", err
 				}
+				env.Sent(post)
 				return fmt.Sprintf("La ligne %d de %s n'est pas dans le diff : posté en commentaire normal.", a.Line, a.Path), nil
 			}
+			post.Thread = thread
+			env.Sent(post)
 			return fmt.Sprintf("Commentaire posté sur %s:%d (fil %s, pour reply_to_thread).", a.Path, a.Line, thread), nil
 		}, agent.When(reviewing), agent.Writes()))
 }

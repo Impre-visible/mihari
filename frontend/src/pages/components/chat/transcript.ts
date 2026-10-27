@@ -10,7 +10,7 @@ export type ToolCall = {
   raw: string;
   args: Record<string, unknown>;
   result: JobEvent | null;
-  // The lines of the subagent a subagent call ran.
+  // The lines of the helper agent the call ran: a subagent, or the reviewer.
   children: JobEvent[];
 };
 
@@ -23,9 +23,10 @@ export function toItems(events: JobEvent[]): Item[] {
   const items: Item[] = [];
   const waiting: ToolCall[] = [];
   for (const event of events) {
-    // A subagent runs inside its call: its lines go there, not in the flow.
+    // A helper agent runs inside its call, named after it: its lines go
+    // there, not in the flow.
     if (event.agent) {
-      const parent = waiting.findLast((c) => c.name === "subagent");
+      const parent = waiting.findLast((c) => c.name === event.agent);
       if (parent) {
         parent.children.push(event);
         continue;

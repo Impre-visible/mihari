@@ -15,6 +15,9 @@ type message struct {
 	Content    string     `json:"content"`
 	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
+	// The model's thinking before this answer, sent back on later turns when
+	// Config.KeepReasoning is set; "" otherwise.
+	ReasoningContent string `json:"reasoning_content,omitempty"`
 	// Data URLs sent along with Content, as OpenAI-style content parts.
 	Images []string `json:"-"`
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Impre-visible/mihari/internal/gitlab"
 	"github.com/Impre-visible/mihari/internal/sandbox"
@@ -63,6 +64,9 @@ type Env struct {
 	Posts  []Post
 	// Messages from the thread not yet handed to the model; Run sets it.
 	Inbox <-chan Event
+
+	// What is already on GitLab, for Again.
+	posted []Post
 
 	// Set by tools.
 	Replied  bool
@@ -150,6 +154,8 @@ type Post struct {
 	Path string `json:"path"`
 	Line int    `json:"line"`
 	Body string `json:"body"`
+	// The thread it is or went in, when known.
+	Thread string `json:"thread,omitempty"`
 }
 
 // Keep records p instead of posting it, and reports whether the run is dry.
@@ -158,6 +164,88 @@ func (e *Env) Keep(p Post) bool {
 		e.Posts = append(e.Posts, p)
 	}
 	return e.DryRun
+}
+
+// Again refuses a post that would repeat one already on GitLab. Models
+// reword rather than copy, so it compares meaning by shared words: a remark
+// close to an earlier one, a few lines apart at most in the same file, or a
+// reply much like an earlier one in the same thread. A second comment on a
+// line already commented goes in that thread instead.
+func (e *Env) Again(p Post) error {
+	words := wordsOf(p.Body)
+	for _, q := range e.posted {
+		switch {
+		case p.Line > 0 && q.Line > 0:
+			if p.Path != q.Path || abs(p.Line-q.Line) > nearbyLines {
+				continue
+			}
+			if similar(words, wordsOf(q.Body)) {
+				return fmt.Errorf("tu as déjà fait cette remarque sur %s:%d%s : « %s ». Rien n'a été posté : passe à la suite",
+					q.Path, q.Line, inThread(q.Thread), clip(q.Body, 300))
+			}
+			if p.Line == q.Line {
+				return fmt.Errorf("tu as déjà commenté %s:%d%s : « %s ». Rien n'a été posté. Pour un autre problème sur cette ligne, réponds dans ce fil avec reply_to_thread",
+					q.Path, q.Line, inThread(q.Thread), clip(q.Body, 300))
+			}
+		case p.Line == 0 && q.Line == 0 && p.Thread == q.Thread && similar(words, wordsOf(q.Body)):
+			return fmt.Errorf("tu as déjà posté une réponse presque identique%s : « %s ». Rien n'a été posté : passe à la suite",
+				inThread(q.Thread), clip(q.Body, 300))
+		}
+	}
+	return nil
+}
+
+// Sent records a post once on GitLab, for Again: one made in this job, or
+// one the bot left in an earlier job.
+func (e *Env) Sent(p Post) {
+	e.posted = append(e.posted, p)
+}
+
+// How far apart two remarks on the same file may be and still be one.
+const nearbyLines = 3
+
+func inThread(id string) string {
+	if id == "" {
+		return ""
+	}
+	return " (fil " + id + ")"
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+// wordsOf returns the distinct words of text worth comparing: lowercase,
+// three letters or more.
+func wordsOf(text string) map[string]bool {
+	words := map[string]bool{}
+	for _, w := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_'
+	}) {
+		if len([]rune(w)) >= 3 {
+			words[w] = true
+		}
+	}
+	return words
+}
+
+// similar reports two texts saying much the same: half their words shared,
+// or one nearly contained in the other.
+func similar(a, b map[string]bool) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return len(a) == len(b)
+	}
+	shared := 0
+	for w := range a {
+		if b[w] {
+			shared++
+		}
+	}
+	union := len(a) + len(b) - shared
+	return float64(shared)/float64(union) >= 0.5 || float64(shared)/float64(min(len(a), len(b))) >= 0.8
 }
 
 // Finish is how the model ends the job.

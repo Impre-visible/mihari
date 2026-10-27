@@ -51,4 +51,9 @@ export interface Post {
     "path": string;
     "line": number;
     "body": string;
+
+    /**
+     * The thread it is or went in, when known.
+     */
+    "thread"?: string;
 }

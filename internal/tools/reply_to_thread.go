@@ -19,11 +19,16 @@ func init() {
 			if strings.TrimSpace(a.Body) == "" || strings.TrimSpace(a.ThreadID) == "" {
 				return "", errors.New("thread_id et body sont obligatoires")
 			}
+			post := agent.Post{Kind: "reply", Thread: a.ThreadID, Body: a.Body}
+			if err := env.Again(post); err != nil {
+				return "", err
+			}
 			if !env.Keep(agent.Post{Kind: "reply", Body: a.Body}) {
 				if _, err := env.GitLab.Reply(ctx, env.Target, a.ThreadID, a.Body); err != nil {
 					return "", err
 				}
 			}
+			env.Sent(post)
 			return "Réponse postée dans le fil.", nil
 		}, agent.When(hasTarget), agent.Writes()))
 }
