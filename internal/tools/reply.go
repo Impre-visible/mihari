@@ -19,6 +19,10 @@ func init() {
 			if strings.TrimSpace(a.Body) == "" {
 				return "", errors.New("réponse vide")
 			}
+			post := agent.Post{Kind: "reply", Body: a.Body}
+			if err := env.Again(post); err != nil {
+				return "", err
+			}
 			// The plan's own comment gives way to the answer, which notifies.
 			plan := env.ClosePlan(ctx)
 			var note gitlab.Note
@@ -32,6 +36,7 @@ func init() {
 				env.PlanTakenIn(note.ID, a.Body)
 			}
 			env.Replied = true
+			env.Sent(post)
 			return "Réponse postée.", nil
 		}, agent.When(hasTarget), agent.Writes()))
 }

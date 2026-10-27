@@ -70,7 +70,7 @@ func TestFitContext(t *testing.T) {
 	msgs := []message{{Role: "system"}, {Role: "user"}, {Role: "tool", Content: big}, {Role: "tool", Content: big},
 		{Role: "assistant"}, {Role: "tool", Content: big}, {Role: "assistant"}, {Role: "tool", Content: big}}
 	fitContext(msgs, 2000, 3.5) // ~6000 characters of room
-	if msgs[2].Content != trimmed || msgs[len(msgs)-1].Content != big {
+	if !isStub(msgs[2].Content) || msgs[len(msgs)-1].Content != big {
 		t.Errorf("oldest should go first, latest stays")
 	}
 }

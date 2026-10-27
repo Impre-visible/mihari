@@ -18,6 +18,13 @@ type Config struct {
 	Timeout  time.Duration
 	// Context window of one job, in tokens.
 	ContextTokens int
+	// An independent reviewer checks the work the first time the model calls
+	// finish with success, and the model hears what it found before ending.
+	Critic bool
+	// Hands the model its own earlier thinking back on each turn, as agentic
+	// models such as Qwen3.8 and Nanbeige expect. Remote APIs that refuse it
+	// in a request leave it off.
+	KeepReasoning bool
 }
 
 // Event is one line of a job's transcript.
@@ -40,8 +47,6 @@ type Outcome struct {
 	PromptTokens     int
 	CompletionTokens int
 }
-
-const trimmed = "[sortie retirée pour libérer du contexte]"
 
 // How many answers in a row without a tool call before giving up on the model.
 const maxIdleAnswers = 3
@@ -78,6 +83,10 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 	// Characters per token, measured on the engine's own counts as the job goes.
 	charsPerToken := 3.5
 	idle := 0
+	seen := repeats{calls: map[string]pastCall{}}
+	// What the work changed, for the reviewer to check.
+	var actions []string
+	reviewed := false
 	var promptTokens, completionTokens int
 	// Every way out reports the tokens spent so far.
 	out := func(o Outcome) Outcome {
@@ -127,6 +136,9 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 		if strings.TrimSpace(res.Message.Content) != "" {
 			say("assistant", "Modèle", res.Message.Content)
 		}
+		if cfg.KeepReasoning {
+			res.Message.ReasoningContent = res.Reasoning
+		}
 		messages = append(messages, res.Message)
 
 		if len(res.Message.ToolCalls) == 0 {
@@ -141,21 +153,36 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 		idle = 0
 
 		for _, call := range res.Message.ToolCalls {
-			name := call.Function.Name
-			say("tool", name, call.Function.Arguments)
+			name, args := call.Function.Name, call.Function.Arguments
+			say("tool", name, args)
 			var out string
-			if tool, ok := byName[name]; ok {
-				result, err := tool.Run(ctx, env, json.RawMessage(call.Function.Arguments))
-				if err != nil {
-					out = "Erreur : " + err.Error()
-				} else {
-					out = result
-				}
-			} else {
+			if tool, ok := byName[name]; !ok {
 				out = fmt.Sprintf("Erreur : outil inconnu %q.", name)
+			} else if done, again := seen.again(name, args); again && tool.Writes() {
+				// Posting a comment or pushing twice would show on GitLab: not done again.
+				out = fmt.Sprintf("Déjà fait au tour %d avec exactement les mêmes arguments, et rien n'a changé depuis : je ne le refais pas. Résultat d'alors : %s",
+					done.turn, clip(done.result, 500))
+				seen.skipped()
+			} else {
+				result, err := tool.Run(ctx, env, json.RawMessage(args))
+				if err != nil {
+					result = "Erreur : " + err.Error()
+				}
+				out = result
+				if again && result == done.result {
+					out += fmt.Sprintf("\n\n[Mihari] Même appel qu'au tour %d, sans rien de modifié depuis, et même résultat : tu avais déjà cette information. Ne le refais pas.", done.turn)
+				}
+				seen.record(name, args, turn, result, tool.Writes() && err == nil)
+				if tool.Writes() && err == nil {
+					actions = append(actions, fmt.Sprintf("- %s %s", name, clip(args, 600)))
+				}
 			}
 			say("result", name, out)
 			messages = append(messages, message{Role: "tool", ToolCallID: call.ID, Content: out})
+		}
+		if nudge := seen.nudge(); nudge != "" {
+			say("info", "Répétitions", nudge)
+			messages = append(messages, message{Role: "user", Content: nudge})
 		}
 
 		// Images ride in a message of their own: a tool result is only text.
@@ -164,6 +191,15 @@ func Run(ctx context.Context, cfg Config, env *Env, system, task string, inbox <
 			env.Images = nil
 		}
 
+		if env.Finished != nil && env.Finished.Success && cfg.Critic && !reviewed && !env.ReadOnly {
+			reviewed = true
+			if problems := critique(ctx, cfg, env, task, env.Finished.Summary, actions, emit); problems != "" {
+				env.Finished = nil
+				messages = append(messages, message{Role: "user", Content: "Un relecteur indépendant a vérifié ton travail avant que tu termines. Il signale :\n\n" +
+					problems + "\n\nVérifie chaque point : corrige ou complète ce qui est juste, sans redire ce qui est déjà posté, et ignore ce qui est faux. Puis rappelle finish."})
+				continue
+			}
+		}
 		if env.Finished != nil {
 			return out(Outcome{Success: env.Finished.Success, Summary: env.Finished.Summary, Turns: turn}), nil
 		}
@@ -196,41 +232,6 @@ func drain(inbox <-chan Event) []Event {
 	}
 }
 
-// What an image weighs in size, whatever its bytes: engines count it in
-// tokens by its pixels, not its encoding.
-const imageSize = 4000
-
-func size(messages []message) int {
-	n := 0
-	for _, m := range messages {
-		n += len(m.Content) + len(m.Images)*imageSize
-		for _, c := range m.ToolCalls {
-			n += len(c.Function.Arguments) + len(c.Function.Name)
-		}
-	}
-	return n
-}
-
-// fitContext blanks the oldest tool results until the conversation fits in
-// 85% of the window, keeping room for the answer. The prompt, the task and
-// the latest exchanges stay whole.
-func fitContext(messages []message, contextTokens int, charsPerToken float64) []message {
-	if contextTokens <= 0 {
-		return messages
-	}
-	budget := int(float64(contextTokens) * 0.85 * charsPerToken)
-	keepFrom := max(2, len(messages)-4)
-	for i := 2; i < keepFrom && size(messages) > budget; i++ {
-		switch m := &messages[i]; {
-		case m.Role == "tool" && m.Content != trimmed:
-			m.Content = trimmed
-		case len(m.Images) > 0:
-			m.Images, m.Content = nil, m.Content+" [image retirée pour libérer du contexte]"
-		}
-	}
-	return messages
-}
-
 // How many model calls a subagent gets before it must conclude.
 const subagentTurns = 30
 
@@ -244,18 +245,7 @@ const subagentSystem = `Tu es un sous-agent de Mihari. Un autre agent t'a confi�
 // context, and returns its conclusion. Its lines go to the job's transcript
 // marked as the subagent's.
 func runSubagent(ctx context.Context, cfg Config, parent *Env, task string, emit func(Event)) (string, error) {
-	child := &Env{
-		Kind: parent.Kind, Runner: parent.Runner, GitLab: parent.GitLab, Target: parent.Target,
-		MR: parent.MR, Issue: parent.Issue, ThreadID: parent.ThreadID, Requester: parent.Requester,
-		ReviewedSHA: parent.ReviewedSHA, PastJobs: parent.PastJobs, Notes: parent.Notes, Vision: parent.Vision,
-		ReadOnly: true,
-	}
-	sub := cfg
-	sub.MaxTurns, sub.Timeout = subagentTurns, 0
-	if cfg.MaxTurns > 0 {
-		sub.MaxTurns = min(sub.MaxTurns, cfg.MaxTurns)
-	}
-	out, err := Run(ctx, sub, child, subagentSystem, task, nil, func(e Event) {
+	out, err := Run(ctx, subConfig(cfg), readOnly(parent), subagentSystem, task, nil, func(e Event) {
 		e.Agent = "subagent"
 		emit(e)
 	})
@@ -266,4 +256,25 @@ func runSubagent(ctx context.Context, cfg Config, parent *Env, task string, emit
 		return "Le sous-agent n'a pas abouti : " + out.Summary, nil
 	}
 	return out.Summary, nil
+}
+
+// readOnly is a fresh environment on the same job that changes nothing.
+func readOnly(parent *Env) *Env {
+	return &Env{
+		Kind: parent.Kind, Runner: parent.Runner, GitLab: parent.GitLab, Target: parent.Target,
+		MR: parent.MR, Issue: parent.Issue, ThreadID: parent.ThreadID, Requester: parent.Requester,
+		ReviewedSHA: parent.ReviewedSHA, PastJobs: parent.PastJobs, Notes: parent.Notes, Vision: parent.Vision,
+		ReadOnly: true,
+	}
+}
+
+// subConfig is the configuration of a helper loop: a turn budget of its own,
+// within the job's, and no reviewer of its own.
+func subConfig(cfg Config) Config {
+	sub := cfg
+	sub.MaxTurns, sub.Timeout, sub.Critic = subagentTurns, 0, false
+	if cfg.MaxTurns > 0 {
+		sub.MaxTurns = min(sub.MaxTurns, cfg.MaxTurns)
+	}
+	return sub
 }

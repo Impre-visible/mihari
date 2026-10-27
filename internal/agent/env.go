@@ -64,6 +64,9 @@ type Env struct {
 	// Messages from the thread not yet handed to the model; Run sets it.
 	Inbox <-chan Event
 
+	// What tools posted so far, for Again and Sent.
+	posted map[string]bool
+
 	// Set by tools.
 	Replied  bool
 	Finished *Finish
@@ -158,6 +161,31 @@ func (e *Env) Keep(p Post) bool {
 		e.Posts = append(e.Posts, p)
 	}
 	return e.DryRun
+}
+
+// Again refuses a post already made in this job, word for word but for case
+// and spacing, at the same place: posted twice, it shows twice on GitLab.
+func (e *Env) Again(p Post) error {
+	if !e.posted[postKey(p)] {
+		return nil
+	}
+	where := ""
+	if p.Line > 0 {
+		where = fmt.Sprintf(" sur %s:%d", p.Path, p.Line)
+	}
+	return fmt.Errorf("tu as déjà posté exactement ce texte%s dans ce job : rien n'a été reposté. Passe à la suite", where)
+}
+
+// Sent records a post once made, for Again.
+func (e *Env) Sent(p Post) {
+	if e.posted == nil {
+		e.posted = map[string]bool{}
+	}
+	e.posted[postKey(p)] = true
+}
+
+func postKey(p Post) string {
+	return fmt.Sprintf("%s %s:%d %s", p.Kind, p.Path, p.Line, strings.Join(strings.Fields(strings.ToLower(p.Body)), " "))
 }
 
 // Finish is how the model ends the job.

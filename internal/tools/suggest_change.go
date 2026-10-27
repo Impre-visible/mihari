@@ -28,7 +28,12 @@ func init() {
 			if err != nil {
 				return "", err
 			}
-			if env.Keep(agent.Post{Kind: "suggestion", Path: a.Path, Line: line, Body: body}) {
+			post := agent.Post{Kind: "suggestion", Path: a.Path, Line: line, Body: body}
+			if err := env.Again(post); err != nil {
+				return "", err
+			}
+			if env.Keep(post) {
+				env.Sent(post)
 				return fmt.Sprintf("Suggestion postée sur %s:%d.", a.Path, line), nil
 			}
 			// A suggestion only applies anchored to a line of the new file in the diff.
@@ -36,6 +41,7 @@ func init() {
 			if err != nil {
 				return "", fmt.Errorf("la ligne %d de %s n'est pas modifiable par une suggestion (elle doit être dans le diff) : %w", line, a.Path, err)
 			}
+			env.Sent(post)
 			return fmt.Sprintf("Suggestion postée sur %s:%d (fil %s, pour reply_to_thread).", a.Path, line, thread), nil
 		}, agent.When(reviewing), agent.Writes()))
 }

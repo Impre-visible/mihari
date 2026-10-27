@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Impre-visible/mihari/internal/agent"
+	"github.com/Impre-visible/mihari/internal/engine"
 	"github.com/Impre-visible/mihari/internal/gitlab"
 	"github.com/Impre-visible/mihari/internal/projects"
 	"github.com/Impre-visible/mihari/internal/sandbox"
@@ -43,6 +44,7 @@ func (s *Service) run(ctx context.Context, j *job, active scheduler.Active) {
 		outcome, err = agent.Run(ctx, agent.Config{
 			URL: active.URL, Model: active.Model, MaxTurns: p.TurnLimit(),
 			Timeout: p.TimeLimit(), ContextTokens: p.ContextPerJob,
+			Critic: true, KeepReasoning: keepsReasoning(p.Engine),
 		}, env, j.systemPrompt, j.taskPrompt, inbox, func(e agent.Event) { s.record(j, e) })
 		stopWatch()
 		s.mu.Lock()
@@ -484,4 +486,11 @@ func stateLabel(s State) string {
 	default:
 		return "Échec :"
 	}
+}
+
+// keepsReasoning tells whether the engine takes the model's earlier thinking
+// back in a request: local engines render it through the chat template, while
+// remote APIs may refuse it.
+func keepsReasoning(kind string) bool {
+	return kind != string(engine.OpenCode)
 }
