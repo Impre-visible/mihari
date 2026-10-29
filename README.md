@@ -191,7 +191,7 @@ Au premier lancement sur un Mac Apple Silicon, l'étape Modèle lit la puce (`ma
 | 128 Go | `Qwen3-Coder-Next-8bit` | 5 jobs × 64K | 2 jobs × 128K |
 | 192 Go | `Qwen3.8-Flash-Next-oQ6e-mtp` | 7 jobs × 64K | 3 jobs × 128K |
 | 256 Go | `Qwen3.8-Flash-Next-oQ8e-mtp` | 7 jobs × 64K | 3 jobs × 128K |
-| 512 Go | `deepseek-ai-DeepSeek-V4-Flash-8bit` | 8 jobs × 64K | 4 jobs × 128K |
+| 512 Go | `DeepSeek-V4.1-Flash-1017-oQ4e-mtp` | 8 jobs × 64K | 4 jobs × 128K |
 
 Le profil Jour relit les MR en semaine de 8 h 30 à 17 h ; le profil Nuit écrit les tests des issues étiquetées `mihari::tests` le reste du temps.
 
