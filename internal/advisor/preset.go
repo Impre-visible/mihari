@@ -75,14 +75,18 @@ type tier struct {
 // Hugging Face in October 2026: where the planned model does not exist or
 // does not fit the tier, the closest one that does takes its place.
 var tiers = []tier{
-	// DeepSeek V4 Pro 4bit weighs 780 GB: V4 Flash in 8 bits leaves room for 8 jobs.
+	// DeepSeek V4.1 Flash 1017 has 552B parameters, 13B active. In oQ4e it
+	// weighs 432 GB, Engram tables and MTP head included, which leaves 55 GB
+	// of cache: V4.1 keeps a single KV head. Its config.json has a
+	// vision_config, so vllm-mlx loads it through mlx-vlm, which knows
+	// deepseek_v41 from 0.7.11.
 	{512, "512 Go",
-		Slot{Model: "mlx-community/deepseek-ai-DeepSeek-V4-Flash-8bit", Jobs: 8, ContextPerJob: 65536},
-		Slot{Model: "mlx-community/deepseek-ai-DeepSeek-V4-Flash-8bit", Jobs: 4, ContextPerJob: 131072}},
+		Slot{Model: "mlx-community/DeepSeek-V4.1-Flash-1017-oQ4e-mtp", Jobs: 8, ContextPerJob: 65536},
+		Slot{Model: "mlx-community/DeepSeek-V4.1-Flash-1017-oQ4e-mtp", Jobs: 4, ContextPerJob: 131072}},
 	// Seven reviews at once want few active parameters and a light cache:
 	// Qwen3.8 Flash Next has 6B active and 25 KB of cache per token. It passes
-	// DeepSeek V4 Flash 0731 on DeepSWE and SWE-bench Pro, and mlx-community
-	// has V4 Flash in 4 and 8 bits only for its April preview.
+	// DeepSeek V4 Flash 0731 on DeepSWE and SWE-bench Pro, and V4.1 Flash
+	// does not fit here: its smallest MLX version weighs 313 GB.
 	{256, "256 Go",
 		Slot{Model: "mlx-community/Qwen3.8-Flash-Next-oQ8e-mtp", Jobs: 7, ContextPerJob: 65536},
 		Slot{Model: "mlx-community/Qwen3.8-Flash-Next-oQ8e-mtp", Jobs: 3, ContextPerJob: 131072}},
